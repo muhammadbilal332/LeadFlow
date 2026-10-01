@@ -1,0 +1,123 @@
+[
+  {
+    "id": "lfOutreachEngine01",
+    "name": "LeadFlow - Automated Outreach Engine",
+    "active": true,
+    "nodes": [
+      {
+        "name": "Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [0, 0],
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 15
+              }
+            ]
+          }
+        },
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "notes": "Safe dev interval (every 15 min). Calls LeadFlow's tick endpoint, which is itself idempotent and rate-limited, so a missed/overlapping run cannot double-send."
+      },
+      {
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [0, 200],
+        "parameters": {},
+        "id": "a1000000-0000-4000-8000-000000000002",
+        "notes": "Lets this workflow be executed immediately on demand for testing, without waiting for the schedule."
+      },
+      {
+        "name": "On-Demand Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [0, 400],
+        "parameters": {
+          "path": "leadflow-outreach-tick",
+          "httpMethod": "POST",
+          "responseMode": "lastNode"
+        },
+        "id": "a1000000-0000-4000-8000-000000000006",
+        "webhookId": "b1000000-0000-4000-8000-000000000006",
+        "notes": "Production webhook: POST http://localhost:5678/webhook/leadflow-outreach-tick — an external system (or this test) can invoke the exact same tick processing on demand, in addition to the schedule."
+      },
+      {
+        "name": "Call LeadFlow Tick",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [280, 100],
+        "onError": "continueErrorOutput",
+        "parameters": {
+          "url": "http://host.docker.internal:4001/api/outreach/tick",
+          "method": "POST",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": false,
+          "options": {
+            "timeout": 15000,
+            "response": {
+              "response": {
+                "neverError": false,
+                "fullResponse": true
+              }
+            }
+          }
+        },
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "rRhICU2fURlM3lOM",
+            "name": "LeadFlow API Key (Bearer)"
+          }
+        },
+        "id": "a1000000-0000-4000-8000-000000000003",
+        "notes": "LeadFlow owns all business logic here: which contacts are due, draft generation, quality checks, approval-gate enforcement, sending via the mock/real email provider, suppression checks, and idempotent message recording. This node only triggers that processing and reads back the result — no CRM logic lives in n8n. retryOnFail is intentionally left OFF so a transient failure is reported, not blindly retried into a duplicate send."
+      },
+      {
+        "name": "Log Success",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [560, 0],
+        "parameters": {
+          "jsCode": "const res = $input.first().json;\nconst body = res.body || res;\nconst result = body.result || {};\nconst summary = `LeadFlow tick OK — drafts generated: ${result.draftsGenerated ?? 0}, sent: ${result.sent ?? 0}, blocked: ${result.blocked ?? 0}, failed: ${result.failed ?? 0}`;\nconsole.log(summary);\nreturn [{ json: { status: 'success', summary, statusCode: res.statusCode ?? 200, result, executedAt: new Date().toISOString() } }];"
+        },
+        "id": "a1000000-0000-4000-8000-000000000004",
+        "notes": "Logs a concrete, human-readable summary of what LeadFlow actually did this tick. Visible in the n8n execution log."
+      },
+      {
+        "name": "Log Failure",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [560, 220],
+        "parameters": {
+          "jsCode": "const err = $input.first().json;\nconst message = err.error?.message || err.message || JSON.stringify(err);\nconst summary = `LeadFlow tick FAILED — ${message}. No retry was attempted; LeadFlow's own idempotent state means the next scheduled run will safely pick up any unsent work without duplicating anything already sent.`;\nconsole.error(summary);\nreturn [{ json: { status: 'failure', summary, error: message, executedAt: new Date().toISOString() } }];"
+        },
+        "id": "a1000000-0000-4000-8000-000000000005",
+        "notes": "Records the failure without retrying and without treating it as success. LeadFlow's own idempotency (per-draft idempotency_key on outreach_messages) means a later, healthy tick cannot double-send whatever this run failed to process."
+      }
+    ],
+    "connections": {
+      "Schedule Trigger": {
+        "main": [[{ "node": "Call LeadFlow Tick", "type": "main", "index": 0 }]]
+      },
+      "Manual Trigger": {
+        "main": [[{ "node": "Call LeadFlow Tick", "type": "main", "index": 0 }]]
+      },
+      "On-Demand Webhook": {
+        "main": [[{ "node": "Call LeadFlow Tick", "type": "main", "index": 0 }]]
+      },
+      "Call LeadFlow Tick": {
+        "main": [
+          [{ "node": "Log Success", "type": "main", "index": 0 }],
+          [{ "node": "Log Failure", "type": "main", "index": 0 }]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  }
+]

@@ -1,0 +1,69 @@
+# Render Blueprint for the LeadFlow API. On Render: New -> Blueprint ->
+# select this repo, and Render reads this file to configure the service.
+# Vars marked `sync: false` are secrets — Render will prompt you to type
+# their real values in the dashboard; they are never stored in this file
+# or committed to git.
+services:
+  - type: web
+    name: leadflow-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      # Set this to your real Netlify site URL once you know it, e.g.
+      # https://leadflow-crm.netlify.app (no trailing slash). CORS strictly
+      # enforces this in production, so the frontend can't reach the API
+      # until it's set correctly.
+      - key: CLIENT_URL
+        sync: false
+      - key: PUBLIC_APP_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: AI_PROVIDER
+        value: none
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_VERIFY_TOKEN
+        sync: false
+      - key: WEBHOOK_ENCRYPTION_KEY
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: mock
+      - key: OUTREACH_AI_PROVIDER
+        value: mock
+      - key: SHEETS_PROVIDER
+        value: mock
+      - key: INBOUND_PROVIDER
+        value: mock
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_WEBHOOK_SECRET
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: DEVELOPER_EMAIL
+        sync: false
+      - key: DEVELOPER_PASSWORD
+        sync: false

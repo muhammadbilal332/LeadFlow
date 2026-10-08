@@ -83,7 +83,7 @@ export default function PublicFormPage(): React.ReactElement {
           <span className="rounded-lg bg-brand-600 p-2 text-white">
             <Zap className="h-5 w-5" aria-hidden="true" />
           </span>
-          <span className="text-lg font-semibold text-slate-900">{businessName || 'sellerClutch'}</span>
+          <span className="text-lg font-semibold text-slate-900">{businessName || 'SellerClutch'}</span>
         </div>
 
         <div className="card p-6 sm:p-8">
@@ -176,7 +176,7 @@ export default function PublicFormPage(): React.ReactElement {
             </>
           ) : null}
         </div>
-        <p className="mt-6 text-center text-xs text-slate-400">Powered by sellerClutch</p>
+        <p className="mt-6 text-center text-xs text-slate-400">Powered by SellerClutch</p>
       </div>
     </div>
   );

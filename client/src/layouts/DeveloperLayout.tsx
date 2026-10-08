@@ -41,7 +41,7 @@ export default function DeveloperLayout(): React.ReactElement {
           <ShieldAlert className="h-4 w-4" aria-hidden="true" />
         </span>
         <div>
-          <p className="text-sm font-bold leading-tight text-white">sellerClutch</p>
+          <p className="text-sm font-bold leading-tight text-white">SellerClutch</p>
           <p className="text-[11px] leading-tight text-slate-400">Developer Console</p>
         </div>
       </div>

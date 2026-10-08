@@ -53,7 +53,7 @@ export default function DeveloperLoginPage(): React.ReactElement {
           <span className="mb-3 rounded-xl bg-slate-800 p-2.5 text-indigo-400 ring-1 ring-slate-700">
             <ShieldCheck className="h-5 w-5" aria-hidden="true" />
           </span>
-          <h1 className="text-lg font-bold tracking-tight text-white">sellerClutch Developer Console</h1>
+          <h1 className="text-lg font-bold tracking-tight text-white">SellerClutch Developer Console</h1>
           <p className="mt-1 text-sm text-slate-400">Platform administration — authorized personnel only.</p>
         </div>
 
@@ -115,7 +115,7 @@ export default function DeveloperLoginPage(): React.ReactElement {
           </div>
         </form>
 
-        <p className="mt-6 text-center text-xs text-slate-500">This console is separate from the sellerClutch CRM. If you're looking for the sales app, go to the regular login page.</p>
+        <p className="mt-6 text-center text-xs text-slate-500">This console is separate from the SellerClutch CRM. If you're looking for the sales app, go to the regular login page.</p>
       </div>
     </div>
   );

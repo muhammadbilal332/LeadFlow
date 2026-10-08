@@ -27,7 +27,7 @@ export default function LoginPage(): React.ReactElement {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-slate-900">Log in to sellerClutch</h1>
+      <h1 className="text-xl font-semibold text-slate-900">Log in to SellerClutch</h1>
       <p className="mt-1 text-sm text-slate-500">Welcome back. Enter your details to continue.</p>
 
       {error && (

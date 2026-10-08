@@ -6,7 +6,7 @@ import ErrorState from '../../components/ErrorState';
 import StatusBadge from '../../components/developer/StatusBadge';
 
 const ROWS: Array<{ key: keyof HealthServices; label: string }> = [
-  { key: 'leadflowApi', label: 'sellerClutch API' },
+  { key: 'leadflowApi', label: 'SellerClutch API' },
   { key: 'database', label: 'Supabase / PostgreSQL' },
   { key: 'scheduler', label: 'Outreach scheduler' },
   { key: 'emailProvider', label: 'Email provider' },

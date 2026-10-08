@@ -61,7 +61,7 @@ export default function DeveloperOverviewPage(): React.ReactElement {
     <div className="space-y-6">
       <div>
         <h1 className="page-heading">Platform overview</h1>
-        <p className="mt-1 text-sm text-slate-500">Real-time statistics across every business on sellerClutch.</p>
+        <p className="mt-1 text-sm text-slate-500">Real-time statistics across every business on SellerClutch.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">

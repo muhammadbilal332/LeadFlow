@@ -66,7 +66,7 @@ function usePageContext(): string {
   if (pathname.startsWith('/leads')) return 'Leads';
   if (pathname.startsWith('/settings')) return 'Settings';
   if (pathname.startsWith('/outreach')) return 'Outreach';
-  return 'sellerClutch';
+  return 'SellerClutch';
 }
 
 export default function AppLayout(): React.ReactElement {
@@ -92,7 +92,7 @@ export default function AppLayout(): React.ReactElement {
       <div className="flex items-center gap-2.5 px-6 py-6">
         <img src="/logo-mark.png" alt="" className="logo-mark-light-variant h-7 w-auto animate-logo-float" aria-hidden="true" />
         <img src="/logo-mark-dark.png" alt="" className="logo-mark-dark-variant h-7 w-auto animate-logo-float" aria-hidden="true" />
-        <span className="text-lg font-bold tracking-tight text-navy-900">sellerClutch</span>
+        <span className="text-lg font-bold tracking-tight text-navy-900">SellerClutch</span>
       </div>
       <nav className="flex-1 space-y-6 overflow-y-auto px-4 pb-4" aria-label="Main navigation">
         {NAV_GROUPS.map((group) => (
@@ -148,7 +148,7 @@ export default function AppLayout(): React.ReactElement {
         <div className="flex items-center gap-2">
           <img src="/logo-mark.png" alt="" className="logo-mark-light-variant h-6 w-auto animate-logo-float" aria-hidden="true" />
           <img src="/logo-mark-dark.png" alt="" className="logo-mark-dark-variant h-6 w-auto animate-logo-float" aria-hidden="true" />
-          <span className="text-base font-bold tracking-tight text-navy-900">sellerClutch</span>
+          <span className="text-base font-bold tracking-tight text-navy-900">SellerClutch</span>
         </div>
         <div className="flex items-center gap-1">
           <ThemeToggle />
@@ -165,7 +165,7 @@ export default function AppLayout(): React.ReactElement {
 
       <header className="z-20 hidden items-center justify-between border-b border-slate-200/80 bg-white/80 px-8 py-3 backdrop-blur lg:fixed lg:top-0 lg:right-0 lg:left-72 lg:flex">
         <div className="flex items-center gap-1.5 text-sm text-slate-500">
-          <span className="font-medium text-slate-400">sellerClutch</span>
+          <span className="font-medium text-slate-400">SellerClutch</span>
           <ChevronRight className="h-3.5 w-3.5 text-slate-300" aria-hidden="true" />
           <span className="font-semibold text-slate-900">{pageContext}</span>
         </div>

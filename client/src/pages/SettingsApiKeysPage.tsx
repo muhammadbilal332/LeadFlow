@@ -77,7 +77,7 @@ export default function SettingsApiKeysPage(): React.ReactElement {
       <PageHeader
         eyebrow="Settings"
         title="API keys"
-        description="For server-to-server integrations that call the sellerClutch API directly."
+        description="For server-to-server integrations that call the SellerClutch API directly."
         actions={
           <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>
             <Plus className="h-4 w-4" /> New key

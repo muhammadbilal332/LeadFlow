@@ -73,7 +73,7 @@ export default function SettingsUsersPage(): React.ReactElement {
       <PageHeader
         eyebrow="Settings"
         title="Team members"
-        description="Manage sales users who can access sellerClutch."
+        description="Manage sales users who can access SellerClutch."
         actions={
           canManageMembers && (
             <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>

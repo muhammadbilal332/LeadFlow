@@ -16,7 +16,7 @@ export default function AuthLayout(): React.ReactElement {
         <Link to="/" className="mb-8 flex items-center justify-center gap-2.5">
           <img src="/logo-mark.png" alt="" className="logo-mark-light-variant h-9 w-auto animate-logo-float" aria-hidden="true" />
           <img src="/logo-mark-dark.png" alt="" className="logo-mark-dark-variant h-9 w-auto animate-logo-float" aria-hidden="true" />
-          <span className="text-xl font-bold tracking-tight text-navy-900">sellerClutch</span>
+          <span className="text-xl font-bold tracking-tight text-navy-900">SellerClutch</span>
         </Link>
         <div className="card p-6 shadow-card sm:p-8">
           <Outlet />

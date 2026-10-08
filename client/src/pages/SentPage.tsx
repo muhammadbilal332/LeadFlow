@@ -44,7 +44,7 @@ export default function SentPage(): React.ReactElement {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Communication" title="Sent" description="Every outgoing email sellerClutch has sent, newest first." />
+      <PageHeader eyebrow="Communication" title="Sent" description="Every outgoing email SellerClutch has sent, newest first." />
 
       {messages.length === 0 ? (
         <EmptyState icon={<Send className="h-6 w-6" />} title="Nothing sent yet" description="Emails you send from a lead's detail page or an outreach campaign will show up here." />

@@ -133,7 +133,7 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
   return (
     <div className="space-y-4">
       <SettingsTabs />
-      <PageHeader eyebrow="Settings" title="Integrations" description="Connect external tools that send leads into sellerClutch." />
+      <PageHeader eyebrow="Settings" title="Integrations" description="Connect external tools that send leads into SellerClutch." />
 
       <div className="card p-5">
         <div className="flex items-center gap-2">
@@ -243,7 +243,7 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
             ))}
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            An external scheduler advances the queue by calling <code className="rounded bg-slate-100 px-1">POST /api/outreach/tick</code> with an API key from Settings &rarr; API keys — sellerClutch does the work and remains the source of truth.
+            An external scheduler advances the queue by calling <code className="rounded bg-slate-100 px-1">POST /api/outreach/tick</code> with an API key from Settings &rarr; API keys — SellerClutch does the work and remains the source of truth.
           </p>
         </div>
       )}

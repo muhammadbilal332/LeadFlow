@@ -1,8 +1,9 @@
 import { apiRequest } from '../lib/api';
 import {
-  OutreachContact, OutreachSequence, SequenceStep, OutreachCampaign, CampaignContact,
+  OutreachContact, OutreachSequence, SequenceStep,
   OutreachDraft, OutreachMessage, EmailReply, SheetImport, Suppression, EmailSettings,
-  OutreachProvidersOverview,
+  OutreachProvidersOverview, FollowUpQueueBucket, FollowUpQueueItem, InboxReply, SentMessage,
+  EmailThreadWithConversation,
 } from '../types';
 
 // --- Contacts ---
@@ -51,51 +52,6 @@ export function deleteSequence(id: string): Promise<void> {
   return apiRequest(`/outreach/sequences/${id}`, { method: 'DELETE' });
 }
 
-// --- Campaigns ---
-export function listCampaigns(): Promise<{ campaigns: OutreachCampaign[] }> {
-  return apiRequest('/outreach/campaigns');
-}
-
-export function getCampaign(id: string): Promise<{ campaign: OutreachCampaign; contacts: CampaignContact[] }> {
-  return apiRequest(`/outreach/campaigns/${id}`);
-}
-
-export function createCampaign(input: { name: string; description?: string | null; senderName?: string | null; senderEmail?: string | null; replyTo?: string | null; sequenceId?: string | null }): Promise<{ campaign: OutreachCampaign }> {
-  return apiRequest('/outreach/campaigns', { method: 'POST', body: input });
-}
-
-export function updateCampaign(id: string, input: Partial<{ name: string; description: string | null; senderName: string | null; senderEmail: string | null; replyTo: string | null; sequenceId: string | null }>): Promise<{ campaign: OutreachCampaign }> {
-  return apiRequest(`/outreach/campaigns/${id}`, { method: 'PATCH', body: input });
-}
-
-export function addContactsToCampaign(id: string, contactIds: string[]): Promise<{ added: number; draftsGenerated: number }> {
-  return apiRequest(`/outreach/campaigns/${id}/contacts`, { method: 'POST', body: { contactIds } });
-}
-
-export function generateDrafts(id: string): Promise<{ generated: number }> {
-  return apiRequest(`/outreach/campaigns/${id}/generate-drafts`, { method: 'POST' });
-}
-
-export function approveCampaign(id: string): Promise<{ campaign: OutreachCampaign }> {
-  return apiRequest(`/outreach/campaigns/${id}/approve`, { method: 'POST' });
-}
-
-export function startCampaign(id: string): Promise<{ campaign: OutreachCampaign; tickResult: { draftsGenerated: number; sent: number; blocked: number; failed: number } }> {
-  return apiRequest(`/outreach/campaigns/${id}/start`, { method: 'POST' });
-}
-
-export function pauseCampaign(id: string): Promise<{ campaign: OutreachCampaign }> {
-  return apiRequest(`/outreach/campaigns/${id}/pause`, { method: 'POST' });
-}
-
-export function cancelCampaign(id: string): Promise<{ campaign: OutreachCampaign }> {
-  return apiRequest(`/outreach/campaigns/${id}/cancel`, { method: 'POST' });
-}
-
-export function deleteCampaign(id: string): Promise<void> {
-  return apiRequest(`/outreach/campaigns/${id}`, { method: 'DELETE' });
-}
-
 // --- Drafts ---
 export function listDrafts(campaignId?: string): Promise<{ drafts: OutreachDraft[] }> {
   return apiRequest(`/outreach/drafts${campaignId ? `?campaignId=${campaignId}` : ''}`);
@@ -122,9 +78,6 @@ export function listMessages(): Promise<{ messages: OutreachMessage[] }> {
   return apiRequest('/outreach/messages');
 }
 
-export function listReplies(): Promise<{ replies: EmailReply[] }> {
-  return apiRequest('/outreach/replies');
-}
 
 export function simulateReply(input: { fromEmail: string; body: string; subject?: string }): Promise<{ result: { skipped: boolean; classification?: string; leadCreated?: boolean } }> {
   return apiRequest('/outreach/dev/simulate-reply', { method: 'POST', body: input });
@@ -163,7 +116,7 @@ export function listImports(): Promise<{ imports: SheetImport[] }> {
 
 export function triggerImport(opts: { connectionId?: string; campaignId?: string; skipAutoCampaign?: boolean } = {}): Promise<{
   import: SheetImport;
-  campaign?: OutreachCampaign | null;
+  campaign?: { id: string; name: string; status: string; sequence_id: string | null } | null;
   campaignResult?: { added: number; draftsGenerated: number };
 }> {
   return apiRequest('/outreach/imports', { method: 'POST', body: opts });
@@ -176,6 +129,29 @@ export function getSettings(): Promise<{ settings: EmailSettings | null }> {
 
 export function updateSettings(input: Partial<{ defaultSenderName: string | null; defaultSenderEmail: string | null; defaultReplyTo: string | null; dailySendLimit: number; voiceDescription: string | null }>): Promise<{ settings: EmailSettings }> {
   return apiRequest('/outreach/settings', { method: 'PATCH', body: input });
+}
+
+// --- Follow-up queue (3/7/8/9-day + Overdue morning work queue) ---
+export function getFollowUpQueue(): Promise<{ queue: Record<FollowUpQueueBucket, FollowUpQueueItem[]>; counts: Record<FollowUpQueueBucket, number> }> {
+  return apiRequest('/outreach/follow-up-queue');
+}
+
+export function generateFollowUpDraft(campaignContactId: string): Promise<{ draft: OutreachDraft }> {
+  return apiRequest(`/outreach/campaign-contacts/${campaignContactId}/generate-draft`, { method: 'POST' });
+}
+
+// --- Gmail-style Inbox ---
+export function getInbox(): Promise<{ replies: InboxReply[] }> {
+  return apiRequest('/outreach/inbox');
+}
+
+export function getThreadConversation(threadId: string): Promise<{ thread: { id: string; subject: string | null; contact_id: string }; conversation: EmailThreadWithConversation['conversation'] }> {
+  return apiRequest(`/outreach/threads/${threadId}`);
+}
+
+// --- Sent folder ---
+export function getSentMessages(): Promise<{ messages: SentMessage[] }> {
+  return apiRequest('/outreach/sent');
 }
 
 // --- Google Sheets connection (under integrations) ---

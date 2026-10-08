@@ -24,9 +24,6 @@ describe('Seed script', () => {
     const forms = await query(`SELECT id FROM lead_forms WHERE business_id = $1`, [business.rows[0].id]);
     expect(forms.rows.length).toBeGreaterThanOrEqual(1);
 
-    const campaigns = await query(`SELECT id FROM campaigns WHERE business_id = $1`, [business.rows[0].id]);
-    expect(campaigns.rows.length).toBeGreaterThanOrEqual(1);
-
     const rules = await query(`SELECT id FROM lead_routing_rules WHERE business_id = $1`, [business.rows[0].id]);
     expect(rules.rows.length).toBeGreaterThanOrEqual(1);
   });

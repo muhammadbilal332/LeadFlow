@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { ForbiddenError, UnauthorizedError } from '../utils/appError';
 
-export function requireRole(...roles: Array<'owner' | 'sales' | 'developer'>) {
+export function requireRole(...roles: Array<'owner' | 'sales' | 'manager' | 'developer'>) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.user) {
       throw new UnauthorizedError('Authentication required');

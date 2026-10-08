@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 
 // Automations and API keys are intentionally not linked here to keep this
 // nav uncluttered — both pages and their underlying functionality (the
-// automation-rule engine on every lead, and the n8n API key) are untouched
+// automation-rule engine on every lead, and the scheduler API key) are untouched
 // and still reachable directly at /settings/automations and
 // /settings/api-keys.
 const OWNER_ONLY_TABS = [
@@ -16,7 +16,7 @@ const OWNER_ONLY_TABS = [
 
 export default function SettingsTabs(): React.ReactElement | null {
   const { user } = useAuth();
-  if (user?.role !== 'owner') return null;
+  if (user?.role !== 'owner' && user?.role !== 'manager') return null;
 
   return (
     <div className="flex gap-1 overflow-x-auto border-b border-slate-200">

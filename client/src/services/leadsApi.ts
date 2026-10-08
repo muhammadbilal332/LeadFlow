@@ -1,17 +1,15 @@
 import { apiRequest } from '../lib/api';
-import { Lead, Pagination, Activity, Note, FollowUp, AiQualification } from '../types';
+import { Lead, Pagination, Activity, Note, FollowUp, LeadEmailHistory, ComposeEmailResult } from '../types';
 
 export interface LeadFilters {
   page?: number;
   pageSize?: number;
   search?: string;
   status?: string;
-  source?: string;
   assignedUserId?: string;
   minScore?: number;
   maxScore?: number;
   priority?: string;
-  campaignId?: string;
   slaStatus?: string;
   unworkedOnly?: boolean;
   sortBy?: string;
@@ -43,10 +41,11 @@ export interface LeadInput {
   source: string;
   industry?: string;
   interestedIn?: string;
-  budget?: number | '';
+
   timeline?: string;
   description?: string;
   assignedUserId?: string | null;
+  linkedinUrl?: string | null;
 }
 
 export function createLead(input: LeadInput): Promise<{ lead: Lead }> {
@@ -77,12 +76,12 @@ export function listLeadFollowUps(leadId: string): Promise<{ followUps: FollowUp
   return apiRequest(`/leads/${leadId}/follow-ups`);
 }
 
-export function qualifyLeadAi(leadId: string): Promise<{ qualification: AiQualification }> {
-  return apiRequest(`/leads/${leadId}/qualify-ai`, { method: 'POST' });
+export function getLeadEmailHistory(leadId: string): Promise<LeadEmailHistory> {
+  return apiRequest(`/leads/${leadId}/email-history`);
 }
 
-export function getLatestAiQualification(leadId: string): Promise<{ qualification: AiQualification | null }> {
-  return apiRequest(`/leads/${leadId}/ai-qualification`);
+export function composeLeadEmail(leadId: string): Promise<ComposeEmailResult> {
+  return apiRequest(`/leads/${leadId}/compose-email`);
 }
 
 export function importLeads(csv: string): Promise<{ imported: number; failed: number; errors: Array<{ row: number; message: string }> }> {

@@ -8,6 +8,6 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', getBusiness);
-router.patch('/', requireRole('owner'), updateBusinessHandler);
+router.patch('/', requireRole('owner', 'manager'), updateBusinessHandler);
 
 export default router;

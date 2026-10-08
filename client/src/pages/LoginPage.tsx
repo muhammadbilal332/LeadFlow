@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
 
@@ -27,7 +27,7 @@ export default function LoginPage(): React.ReactElement {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-slate-900">Log in to LeadFlow</h1>
+      <h1 className="text-xl font-semibold text-slate-900">Log in to sellerClutch</h1>
       <p className="mt-1 text-sm text-slate-500">Welcome back. Enter your details to continue.</p>
 
       {error && (
@@ -49,13 +49,6 @@ export default function LoginPage(): React.ReactElement {
           {submitting ? 'Logging in...' : 'Log in'}
         </button>
       </form>
-
-      <p className="mt-6 text-center text-sm text-slate-500">
-        Don&apos;t have an account?{' '}
-        <Link to="/signup" className="font-medium text-brand-600 hover:text-brand-700">
-          Sign up
-        </Link>
-      </p>
 
       <div className="mt-6 rounded-md bg-slate-50 p-3 text-xs text-slate-500">
         <p className="font-medium text-slate-600">Demo credentials</p>

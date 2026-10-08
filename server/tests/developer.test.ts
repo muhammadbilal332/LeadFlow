@@ -12,7 +12,7 @@ describe('Developer/Admin Dashboard', () => {
   const app = createApp();
 
   it('blocks anonymous access to every developer route with 401', async () => {
-    const routes = ['/api/developer/overview', '/api/developer/businesses', '/api/developer/users', '/api/developer/leads', '/api/developer/outreach', '/api/developer/n8n', '/api/developer/health', '/api/developer/providers', '/api/developer/usage', '/api/developer/logs', '/api/developer/audit'];
+    const routes = ['/api/developer/overview', '/api/developer/users', '/api/developer/outreach', '/api/developer/automation', '/api/developer/health', '/api/developer/providers', '/api/developer/usage', '/api/developer/logs', '/api/developer/audit'];
     for (const route of routes) {
       const res = await request(app).get(route);
       expect(res.status).toBe(401);
@@ -38,7 +38,7 @@ describe('Developer/Admin Dashboard', () => {
     // server re-issuing one, which only happens for a real developer
     // account's credentials.
     const owner = await signupOwner(app);
-    const res = await request(app).get('/api/developer/businesses').set('Authorization', `Bearer ${owner.token}`);
+    const res = await request(app).get('/api/developer/users').set('Authorization', `Bearer ${owner.token}`);
     expect(res.status).toBe(403);
   });
 
@@ -53,11 +53,6 @@ describe('Developer/Admin Dashboard', () => {
     expect(overviewRes.body.overview.totalBusinesses).toBeGreaterThanOrEqual(3); // 2 test businesses + the developer's own platform business
     expect(overviewRes.body.overview.totalUsers).toBeGreaterThanOrEqual(3);
 
-    const businessesRes = await request(app).get('/api/developer/businesses').set(auth);
-    expect(businessesRes.status).toBe(200);
-    expect(businessesRes.body.businesses.some((b: any) => b.name === 'Acme One')).toBe(true);
-    expect(businessesRes.body.businesses.some((b: any) => b.name === 'Acme Two')).toBe(true);
-
     const usersRes = await request(app).get('/api/developer/users').set(auth);
     expect(usersRes.status).toBe(200);
     expect(usersRes.body.users.some((u: any) => u.business_id === owner1.businessId)).toBe(true);
@@ -65,17 +60,13 @@ describe('Developer/Admin Dashboard', () => {
     expect(usersRes.body.users.every((u: any) => !('password_hash' in u) && !('passwordHash' in u))).toBe(true);
     expect(JSON.stringify(usersRes.body)).not.toContain(developer.token);
 
-    const leadsRes = await request(app).get('/api/developer/leads').set(auth);
-    expect(leadsRes.status).toBe(200);
-    expect(Array.isArray(leadsRes.body.leads)).toBe(true);
-
     const outreachRes = await request(app).get('/api/developer/outreach').set(auth);
     expect(outreachRes.status).toBe(200);
     expect(outreachRes.body.lifecycle).toBeTruthy();
 
-    const n8nRes = await request(app).get('/api/developer/n8n').set(auth);
-    expect(n8nRes.status).toBe(200);
-    expect(typeof n8nRes.body.connected).toBe('boolean');
+    const automationRes = await request(app).get('/api/developer/automation').set(auth);
+    expect(automationRes.status).toBe(200);
+    expect(typeof automationRes.body.connected).toBe('boolean');
 
     const healthRes = await request(app).get('/api/developer/health').set(auth);
     expect(healthRes.status).toBe(200);
@@ -97,17 +88,18 @@ describe('Developer/Admin Dashboard', () => {
     expect(auditRes.body.logs.some((l: any) => l.action === 'developer_login')).toBe(true);
   });
 
-  it('n8n connection status is derived from a real recorded execution, not assumed', async () => {
+  it('automation scheduler connection status is derived from a real recorded execution, not assumed', async () => {
     const developer = await signupDeveloper(app);
     const auth = { Authorization: `Bearer ${developer.token}` };
 
-    const before = await request(app).get('/api/developer/n8n').set(auth);
+    const before = await request(app).get('/api/developer/automation').set(auth);
     expect(before.body.connected).toBe(false);
 
-    // A JWT-authenticated (UI) tick call must NOT count as "n8n is connected" —
-    // only an API-key-authenticated call (a real external caller) should.
+    // A JWT-authenticated (UI) tick call must NOT count as "the scheduler is
+    // connected" — only an API-key-authenticated call (a real external
+    // scheduler) should.
     await request(app).post('/api/outreach/tick').set(auth).send({});
-    const afterJwtTick = await request(app).get('/api/developer/n8n').set(auth);
+    const afterJwtTick = await request(app).get('/api/developer/automation').set(auth);
     expect(afterJwtTick.body.connected).toBe(false);
     expect(afterJwtTick.body.summary.totalExecutions).toBeGreaterThan(0);
   });

@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { createLead } from '../services/leadsApi';
 import { listUsers } from '../services/usersApi';
-import { LEAD_SOURCES, User } from '../types';
+import { User } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { ApiError } from '../lib/api';
@@ -22,17 +22,15 @@ export default function NewLeadPage(): React.ReactElement {
     company: '',
     email: '',
     phone: '',
-    source: 'Website',
     industry: '',
     interestedIn: '',
-    budget: '',
     timeline: '',
     description: '',
     assignedUserId: '',
   });
 
   useEffect(() => {
-    if (user?.role === 'owner') {
+    if ((user?.role === 'owner' || user?.role === 'manager')) {
       listUsers().then((res) => setUsers(res.users)).catch(() => undefined);
     }
   }, [user]);
@@ -55,7 +53,7 @@ export default function NewLeadPage(): React.ReactElement {
     try {
       const res = await createLead({
         ...form,
-        budget: form.budget ? Number(form.budget) : '',
+        source: 'Manual',
         assignedUserId: form.assignedUserId || null,
       });
       showToast('Lead created successfully.');
@@ -110,15 +108,7 @@ export default function NewLeadPage(): React.ReactElement {
             <input id="phone" className="input" value={form.phone} onChange={(e) => update('phone', e.target.value)} />
           </div>
 
-          <div>
-            <label htmlFor="source" className="label">Source</label>
-            <select id="source" className="select" value={form.source} onChange={(e) => update('source', e.target.value)}>
-              {LEAD_SOURCES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-          {user?.role === 'owner' && (
+          {(user?.role === 'owner' || user?.role === 'manager') && (
             <div>
               <label htmlFor="assignedUserId" className="label">Assign to</label>
               <select id="assignedUserId" className="select" value={form.assignedUserId} onChange={(e) => update('assignedUserId', e.target.value)}>
@@ -130,13 +120,9 @@ export default function NewLeadPage(): React.ReactElement {
             </div>
           )}
 
-          <div>
+          <div className="sm:col-span-2">
             <label htmlFor="interestedIn" className="label">Interested in</label>
             <input id="interestedIn" className="input" value={form.interestedIn} onChange={(e) => update('interestedIn', e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="budget" className="label">Budget (USD)</label>
-            <input id="budget" type="number" min="0" step="1" className="input" value={form.budget} onChange={(e) => update('budget', e.target.value)} />
           </div>
 
           <div className="sm:col-span-2">

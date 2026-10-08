@@ -39,7 +39,7 @@ export default function DeveloperSettingsPage(): React.ReactElement {
     { label: 'AI provider', value: providerLabel(providers.ai.name) },
     { label: 'Sheets provider', value: providerLabel(providers.sheets.name) },
     { label: 'Inbound provider', value: providerLabel(providers.inbound.name) },
-    { label: 'n8n', value: health.n8n.status === 'healthy' ? 'Connected' : health.n8n.status === 'degraded' ? 'Degraded' : 'Not connected' },
+    { label: 'Outreach scheduler', value: health.scheduler.status === 'healthy' ? 'Connected' : health.scheduler.status === 'degraded' ? 'Degraded' : 'Not connected' },
   ];
 
   return (

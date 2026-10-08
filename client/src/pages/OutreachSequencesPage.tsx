@@ -8,6 +8,7 @@ import EmptyState from '../components/EmptyState';
 import ConfirmDialog from '../components/ConfirmDialog';
 import OutreachTabs from '../components/OutreachTabs';
 import { useToast } from '../hooks/useToast';
+import PageHeader from '../components/PageHeader';
 
 const blankStep = (order: number): SequenceStep => ({ step_order: order, delay_days: order === 1 ? 0 : 3, subject_template: '', body_template: '', ai_personalize: true, is_enabled: true });
 
@@ -90,15 +91,16 @@ export default function OutreachSequencesPage(): React.ReactElement {
   return (
     <div className="space-y-4">
       <OutreachTabs />
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Sequences</h1>
-          <p className="text-sm text-slate-500">A sequence is a set of follow-up emails with a delay between each step.</p>
-        </div>
-        <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>
-          <Plus className="h-4 w-4" /> New sequence
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Outreach"
+        title="Sequences"
+        description="A sequence is a set of follow-up emails with a delay between each step."
+        actions={
+          <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>
+            <Plus className="h-4 w-4" /> New sequence
+          </button>
+        }
+      />
 
       {showForm && (
         <form onSubmit={handleCreate} className="card space-y-3 p-4">

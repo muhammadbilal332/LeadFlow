@@ -9,6 +9,7 @@ import ErrorState from '../components/ErrorState';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../hooks/useToast';
 import { isLikelyPersonalEmailDomain } from '../lib/outreachErrors';
+import PageHeader from '../components/PageHeader';
 
 export default function SettingsIntegrationsPage(): React.ReactElement {
   const { showToast } = useToast();
@@ -132,10 +133,7 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
   return (
     <div className="space-y-4">
       <SettingsTabs />
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Integrations</h1>
-        <p className="text-sm text-slate-500">Connect external tools that send leads into LeadFlow.</p>
-      </div>
+      <PageHeader eyebrow="Settings" title="Integrations" description="Connect external tools that send leads into sellerClutch." />
 
       <div className="card p-5">
         <div className="flex items-center gap-2">
@@ -245,7 +243,7 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
             ))}
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            n8n orchestrates the schedule by calling <code className="rounded bg-slate-100 px-1">POST /api/outreach/tick</code> with an API key from Settings &rarr; API keys — LeadFlow does the work and remains the source of truth.
+            An external scheduler advances the queue by calling <code className="rounded bg-slate-100 px-1">POST /api/outreach/tick</code> with an API key from Settings &rarr; API keys — sellerClutch does the work and remains the source of truth.
           </p>
         </div>
       )}

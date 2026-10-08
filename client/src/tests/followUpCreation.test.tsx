@@ -6,10 +6,12 @@ import FollowUpsPage from '../pages/FollowUpsPage';
 import { ToastProvider } from '../hooks/useToast';
 import * as followUpsApi from '../services/followUpsApi';
 import * as leadsApi from '../services/leadsApi';
+import * as outreachApi from '../services/outreachApi';
 import { sampleLead } from './fixtures';
 
 vi.mock('../services/followUpsApi');
 vi.mock('../services/leadsApi');
+vi.mock('../services/outreachApi');
 
 describe('FollowUpsPage (creation)', () => {
   beforeEach(() => {
@@ -19,9 +21,14 @@ describe('FollowUpsPage (creation)', () => {
       leads: [sampleLead({ name: 'Follow-up Target' })],
       pagination: { page: 1, pageSize: 200, total: 1, totalPages: 1 },
     });
+    vi.mocked(outreachApi.getFollowUpQueue).mockResolvedValue({
+      queue: { '3-day': [], '7-day': [], '14-day': [], '28-day': [], overdue: [] },
+      counts: { '3-day': 0, '7-day': 0, '14-day': 0, '28-day': 0, overdue: 0 },
+    });
   });
 
-  it('shows an empty state with no follow-ups scheduled', async () => {
+  it('shows an empty state with no manual follow-ups scheduled', async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <ToastProvider>
@@ -30,10 +37,11 @@ describe('FollowUpsPage (creation)', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText(/don't have any follow-ups scheduled/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /manual reminders/i }));
+    expect(await screen.findByText(/no manual reminders scheduled/i)).toBeInTheDocument();
   });
 
-  it('creates a new follow-up for a selected lead', async () => {
+  it('creates a new manual reminder for a selected lead', async () => {
     vi.mocked(followUpsApi.createFollowUp).mockResolvedValue({
       followUp: {
         id: 'fu-1', business_id: 'biz-1', lead_id: 'lead-1', user_id: null, type: 'Call',
@@ -50,7 +58,8 @@ describe('FollowUpsPage (creation)', () => {
       </MemoryRouter>
     );
 
-    await user.click(screen.getByRole('button', { name: /new follow-up/i }));
+    await user.click(screen.getByRole('button', { name: /manual reminders/i }));
+    await user.click(screen.getByRole('button', { name: /new reminder/i }));
     await user.selectOptions(screen.getByLabelText(/select lead/i), 'lead-1');
     await user.type(screen.getByLabelText(/scheduled date and time/i), '2030-01-01T10:00');
     await user.click(screen.getByRole('button', { name: /^schedule$/i }));

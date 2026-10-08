@@ -156,11 +156,14 @@ scoring, assignment, and SLA scheduling all still apply.
 - **Queue, not immediate bulk-send.** Approving a draft marks it eligible;
   actual sending happens when `outreachQueueService` runs, either from the
   UI's "Process queue now" button or `POST /api/outreach/tick`.
-- **n8n as an orchestration layer, not a state owner.** In production, an
-  n8n scheduled workflow calls `POST /api/outreach/tick` (authenticated with
-  a LeadFlow API key from Settings → API keys, via `requireAuthOrApiKey`)
-  every few minutes. n8n never holds outreach state — LeadFlow remains the
-  sole source of truth for every contact, draft, message, and reply.
+- **An external scheduler as a trigger, not a state owner.** In production,
+  a GitHub Actions scheduled workflow (`.github/workflows/outreach-tick.yml`)
+  calls `POST /api/outreach/tick` (authenticated with a LeadFlow API key from
+  Settings → API keys, via `requireAuthOrApiKey`) every 15 minutes. The
+  scheduler never holds outreach state — LeadFlow remains the sole source of
+  truth for every contact, draft, message, and reply. LeadFlow has no
+  runtime dependency on any specific scheduler; any HTTP-capable caller with
+  a valid API key can trigger the same endpoint.
 - **Idempotency.** Every send has an `idempotency_key` (`draft:<draftId>`)
   on `outreach_messages`; a retried tick can never double-send the same
   draft, and Resend also receives the same key as its own `Idempotency-Key`
@@ -172,46 +175,39 @@ scoring, assignment, and SLA scheduling all still apply.
   business, per provider, per day and month — visible in Outreach →
   Overview and in `GET /api/outreach/usage`.
 
-## n8n orchestration — set up, verified working
+## Scheduler — GitHub Actions (n8n is not required)
 
-**LeadFlow owns business state. n8n owns orchestration.** n8n never talks to
-Supabase directly and never contains CRM logic — it only calls LeadFlow's
-API on a schedule and reports the result. This has been built and executed
-end-to-end against a real local n8n instance (Docker, `n8nio/n8n`), not just
-documented.
+**LeadFlow owns business state. The scheduler only owns triggering.**
+LeadFlow has no runtime dependency on n8n, or on any other workflow tool —
+`.github/workflows/outreach-tick.yml` calls LeadFlow's API on a schedule and
+that's the entire integration surface.
 
-**Workflow**: `LeadFlow - Automated Outreach Engine`, with three entry
-points that all lead to the same call:
-- **Schedule Trigger** — every 15 minutes by default (a safe interval for
-  local testing; tune `minutesInterval` for your volume).
-- **Manual Trigger** — for on-demand execution from the n8n editor.
-- **Webhook** (`POST /webhook/leadflow-outreach-tick` once the workflow is
-  active) — for triggering from an external system.
+**Workflow**: `Outreach tick` (`.github/workflows/outreach-tick.yml`), with
+two triggers that both lead to the same call:
+- **`schedule` (cron)** — every 15 minutes.
+- **`workflow_dispatch`** — for on-demand execution from the GitHub Actions
+  UI or `gh workflow run`.
 
-Each feeds into one **HTTP Request** node, `Call LeadFlow Tick`:
-`POST {LEADFLOW_URL}/api/outreach/tick`, authenticated with an n8n
-**HTTP Header Auth** credential holding `Authorization: Bearer <LeadFlow API
-key>` — the same API key mechanism already used elsewhere (Settings → API
-keys), never a hardcoded secret in the node itself. From inside a Docker
-container, `LEADFLOW_URL` is `http://host.docker.internal:4001` in local
-dev.
+Both run the same step: `POST {LEADFLOW_API_URL}/api/outreach/tick`,
+authenticated with `Authorization: Bearer <LeadFlow API key>` — the same API
+key mechanism already used elsewhere (Settings → API keys), stored as the
+GitHub repository secrets `LEADFLOW_API_URL` and `LEADFLOW_API_KEY`, never
+hardcoded or logged.
 
-The HTTP node's output branches (`onError: continueErrorOutput`) into two
-**Code** nodes:
-- `Log Success` — parses `{draftsGenerated, sent, blocked, failed}` from
-  LeadFlow's response and logs a plain-English summary. This is the honest
-  business result for the cycle — `failed: 1` is logged here too, since a
-  per-contact send rejection is a normal, expected outcome of a tick, not an
-  HTTP-level error.
-- `Log Failure` — only reached if the HTTP call itself fails (LeadFlow
-  unreachable, timeout, non-2xx). Logs the error and explicitly does
-  **not** retry — `retryOnFail` is left off. LeadFlow's own idempotency
-  (the `idempotency_key` on `outreach_messages`) guarantees the next tick
-  can safely re-attempt without ever double-sending.
+The step fails the whole job (non-zero exit) on any non-2xx response, so a
+failed tick shows up as a failed GitHub Actions run — visible in the
+Actions tab and optionally wired to GitHub's own notification settings. It
+deliberately does **not** retry: LeadFlow's own idempotency (the
+`idempotency_key` on `outreach_messages`) guarantees the *next* scheduled
+run can safely re-attempt without ever double-sending, exactly as it did
+under the previous n8n-based scheduler — retrying inside the same run would
+only duplicate effort, not add safety.
 
-**Idempotency, verified**: running the workflow twice in a row against the
-same approved draft only sends once; the second run finds no eligible work
-(`sent: 0`) because the campaign_contact already moved to a terminal state.
+**Idempotency, verified**: running the tick twice in a row against the same
+approved draft only sends once; the second run finds no eligible work
+(`sent: 0`) because the campaign_contact already moved to a terminal state
+— unchanged from before, since this logic lives entirely in
+`outreachQueueService`, not in whatever calls it.
 
 **Failure handling, verified**: a send rejected by the mock provider is
 recorded as `outreach_messages.status = 'failed'` with a `failed_reason`,
@@ -221,24 +217,21 @@ finds zero eligible work rather than re-attempting or double-reporting it.
 
 **How to run it yourself**:
 1. Generate a LeadFlow API key: Settings → API keys → New key.
-2. In n8n, create an HTTP Header Auth credential named e.g. "LeadFlow API
-   Key" with header `Authorization` = `Bearer <key>`.
-3. Build the workflow above (or import the JSON — see
-   `n8n import:workflow --input=<file>` if you're scripting it), pointing
-   the HTTP Request node at your LeadFlow instance's `/api/outreach/tick`.
-4. Toggle the workflow active to enable the schedule/webhook, or use n8n's
-   own "Execute Workflow" button / `n8n execute --id=<id>` for a one-off
-   run.
-5. Switching from the mock email provider to Resend later requires zero
-   changes on the n8n side — n8n only ever calls `/api/outreach/tick`; which
-   provider actually sends the email is entirely a LeadFlow-side
-   `EMAIL_PROVIDER` env var.
+2. In your GitHub repo: Settings → Secrets and variables → Actions, add
+   `LEADFLOW_API_URL` (your deployed API's base URL) and `LEADFLOW_API_KEY`
+   (the key from step 1).
+3. Run it on demand from the Actions tab (`Outreach tick` → Run workflow),
+   or just wait for the next scheduled run.
+4. Switching from the mock email provider to Resend later requires zero
+   changes on the GitHub Actions side — it only ever calls
+   `/api/outreach/tick`; which provider actually sends the email is
+   entirely a LeadFlow-side `EMAIL_PROVIDER` env var.
 
-**Deployment note**: n8n should run as its own separate service (its own
-container/host), reachable from LeadFlow's network only insofar as it needs
-to call LeadFlow's public API URL with an API key — it does not need
-LeadFlow's database credentials, JWT secret, or any server-side secret
-beyond the one API key you issue it.
+**History**: this previously ran as an n8n workflow
+(`LeadFlow - Automated Outreach Engine`) calling the same endpoint on the
+same schedule. n8n contained no business logic then either — it was purely
+a trigger — so replacing it with GitHub Actions changed nothing about how
+outreach actually works, only what calls it.
 
 ## Security
 

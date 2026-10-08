@@ -12,20 +12,12 @@ router.use(requireAuth, requireRole('developer'));
 
 router.get('/overview', developer.getOverview);
 
-router.get('/businesses', developer.listBusinesses);
-router.get('/businesses/:id', developer.getBusiness);
-router.post('/businesses/:id/deactivate', developer.deactivateBusiness);
-router.post('/businesses/:id/reactivate', developer.reactivateBusiness);
-router.delete('/businesses/:id', developer.deleteBusinessHandler);
-
 router.get('/users', developer.listUsers);
 router.patch('/users/:id/role', developer.changeUserRole);
 router.patch('/users/:id/status', developer.setUserStatus);
 
-router.get('/leads', developer.listLeads);
-
 router.get('/outreach', developer.getOutreach);
-router.get('/n8n', developer.getN8n);
+router.get('/automation', developer.getAutomationStatus);
 router.get('/health', developer.getHealth);
 router.get('/providers', developer.getProviders);
 router.get('/usage', developer.getUsage);

@@ -60,8 +60,8 @@ export default function DeveloperUsagePage(): React.ReactElement {
           <p className="mt-2 text-2xl font-bold text-slate-900">{usage.aiGenerationsTotal}</p>
         </div>
         <div className="card p-5">
-          <p className="eyebrow">n8n executions (total)</p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">{usage.n8nExecutionsTotal}</p>
+          <p className="eyebrow">Automation executions (total)</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{usage.automationExecutionsTotal}</p>
         </div>
       </div>
 

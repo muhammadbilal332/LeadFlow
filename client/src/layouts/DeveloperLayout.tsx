@@ -1,18 +1,16 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Building2, Users2, Contact2, Send, Workflow, HeartPulse, Plug, Gauge,
+  LayoutDashboard, Users2, Send, Workflow, HeartPulse, Plug, Gauge,
   ScrollText, ShieldCheck, Settings, Menu, X, LogOut, ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 const NAV_ITEMS = [
   { to: '/developer/dashboard', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/developer/businesses', label: 'Businesses', icon: Building2 },
   { to: '/developer/users', label: 'Users', icon: Users2 },
-  { to: '/developer/leads', label: 'Leads', icon: Contact2 },
   { to: '/developer/outreach', label: 'Outreach', icon: Send },
-  { to: '/developer/n8n', label: 'n8n Automation', icon: Workflow },
+  { to: '/developer/automation', label: 'Automation', icon: Workflow },
   { to: '/developer/health', label: 'API Health', icon: HeartPulse },
   { to: '/developer/providers', label: 'Provider Status', icon: Plug },
   { to: '/developer/usage', label: 'Usage', icon: Gauge },
@@ -43,7 +41,7 @@ export default function DeveloperLayout(): React.ReactElement {
           <ShieldAlert className="h-4 w-4" aria-hidden="true" />
         </span>
         <div>
-          <p className="text-sm font-bold leading-tight text-white">LeadFlow</p>
+          <p className="text-sm font-bold leading-tight text-white">sellerClutch</p>
           <p className="text-[11px] leading-tight text-slate-400">Developer Console</p>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { useToast } from '../hooks/useToast';
 import { updateBusiness } from '../services/usersApi';
 import { ApiError } from '../lib/api';
 import SettingsTabs from '../components/SettingsTabs';
+import PageHeader from '../components/PageHeader';
 
 export default function SettingsBusinessPage(): React.ReactElement {
   const { business, user, refreshBusiness } = useAuth();
@@ -32,14 +33,11 @@ export default function SettingsBusinessPage(): React.ReactElement {
     }
   }
 
-  const isOwner = user?.role === 'owner';
+  const isOwner = user?.role === 'owner' || user?.role === 'manager';
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Business settings</h1>
-        <p className="text-sm text-slate-500">Manage your workspace details.</p>
-      </div>
+      <PageHeader eyebrow="Settings" title="Business settings" description="Manage your workspace details." />
 
       <SettingsTabs />
 

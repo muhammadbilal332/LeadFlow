@@ -18,7 +18,7 @@ export default function AuthLayout(): React.ReactElement {
           <span className="rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 p-2.5 text-white shadow-card">
             <Zap className="h-5 w-5" aria-hidden="true" fill="currentColor" />
           </span>
-          <span className="text-xl font-bold tracking-tight text-slate-900">LeadFlow</span>
+          <span className="text-xl font-bold tracking-tight text-navy-900">sellerClutch</span>
         </Link>
         <div className="card p-6 shadow-card sm:p-8">
           <Outlet />

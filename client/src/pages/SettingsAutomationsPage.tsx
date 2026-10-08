@@ -4,6 +4,7 @@ import * as automationApi from '../services/automationApi';
 import * as usersApi from '../services/usersApi';
 import { AutomationRule, User, FOLLOW_UP_TYPES } from '../types';
 import SettingsTabs from '../components/SettingsTabs';
+import PageHeader from '../components/PageHeader';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -106,15 +107,16 @@ export default function SettingsAutomationsPage(): React.ReactElement {
   return (
     <div className="space-y-4">
       <SettingsTabs />
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Automations</h1>
-          <p className="text-sm text-slate-500">WHEN a lead is created, IF conditions match, THEN run an action.</p>
-        </div>
-        <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>
-          <Plus className="h-4 w-4" /> New automation
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Settings"
+        title="Automations"
+        description="WHEN a lead is created, IF conditions match, THEN run an action."
+        actions={
+          <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>
+            <Plus className="h-4 w-4" /> New automation
+          </button>
+        }
+      />
 
       {showForm && (
         <div className="card p-4">
@@ -123,7 +125,6 @@ export default function SettingsAutomationsPage(): React.ReactElement {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <select className="select" value={conditionField} onChange={(e) => setConditionField(e.target.value as typeof conditionField)}>
                 <option value="score">IF Score</option>
-                <option value="source">IF Source</option>
                 <option value="industry">IF Industry</option>
               </select>
               <select className="select" value={conditionOperator} onChange={(e) => setConditionOperator(e.target.value as typeof conditionOperator)}>

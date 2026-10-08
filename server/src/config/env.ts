@@ -55,7 +55,6 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional().default(''),
   GOOGLE_CLIENT_SECRET: z.string().optional().default(''),
   GOOGLE_REDIRECT_URI: z.string().optional().default(''),
-  N8N_WEBHOOK_URL: z.string().optional().default(''),
   OUTREACH_DAILY_SEND_LIMIT: z.coerce.number().default(100),
 
   // ===========================================================

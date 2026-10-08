@@ -1,0 +1,40 @@
+name: Outreach tick
+
+# Replaces the n8n "LeadFlow - Automated Outreach Engine" workflow's
+# schedule trigger. LeadFlow owns 100% of the outreach business logic
+# (draft generation, sending, suppression, idempotency); this workflow is
+# only a trigger, exactly like n8n's Schedule Trigger node was — it calls
+# POST /api/outreach/tick with a LeadFlow API key and does nothing else.
+#
+# Runs on GitHub's infrastructure, not on any laptop or local machine, and
+# does not require n8n or any other always-on process to be running.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   LEADFLOW_API_URL  - e.g. https://leadflow-api.onrender.com (no trailing slash)
+#   LEADFLOW_API_KEY  - a LeadFlow API key for the SellerClutch business
+#                        (Settings -> API keys -> New key in the LeadFlow app)
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call POST /api/outreach/tick
+        run: |
+          http_code=$(curl -sS -o /tmp/tick-response.json -w "%{http_code}" \
+            -X POST "${LEADFLOW_API_URL}/api/outreach/tick" \
+            -H "Authorization: Bearer ${LEADFLOW_API_KEY}" \
+            -H "Content-Type: application/json")
+          echo "HTTP status: $http_code"
+          cat /tmp/tick-response.json
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "Tick call failed with status $http_code"
+            exit 1
+          fi
+        env:
+          LEADFLOW_API_URL: ${{ secrets.LEADFLOW_API_URL }}
+          LEADFLOW_API_KEY: ${{ secrets.LEADFLOW_API_KEY }}

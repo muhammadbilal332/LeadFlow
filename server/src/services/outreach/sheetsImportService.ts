@@ -100,7 +100,7 @@ export async function runImport(businessId: string, connection: SheetConnectionR
     // just newly-created contacts — it also backfills a lead for a contact
     // that was imported before this existed.
     try {
-      await intakeLead({
+      const { lead } = await intakeLead({
         businessId,
         name: mapped.contact_name || mapped.company_name || email,
         email,
@@ -114,6 +114,9 @@ export async function runImport(businessId: string, connection: SheetConnectionR
         actorUserId: createdBy ?? null,
         skipAutomation: true,
       });
+      if (!contact.lead_id) {
+        await outreachContactRepo.linkToLead(contact.id, businessId, lead.id);
+      }
     } catch (err) {
       console.error(`sheetsImportService: failed to create a CRM lead for contact ${contact.id}:`, err instanceof Error ? err.message : err);
     }

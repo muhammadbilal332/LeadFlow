@@ -19,6 +19,9 @@ import * as emailSettingsRepo from '../../repositories/emailSettingsRepo';
 import * as suppressionService from './suppressionService';
 import { scheduleNextStep, findApprovedDraftForCurrentStep, generateDueDrafts } from './sequenceService';
 import { env } from '../../config/env';
+import { markLeadContacted } from '../leadStatusSyncService';
+import * as userRepo from '../../repositories/userRepo';
+import { firstNameOf, withSenderFirstName } from './signOff';
 
 export interface SendCycleResult {
   draftsGenerated: number;
@@ -27,7 +30,7 @@ export interface SendCycleResult {
   failed: number;
 }
 
-/** One full processing cycle: generate any newly-due drafts, then send every approved+ready draft. This is what the n8n-callable /api/outreach/tick endpoint runs, and what a local demo can trigger on demand. */
+/** One full processing cycle: generate any newly-due drafts, then send every approved+ready draft. This is what the externally-schedulable /api/outreach/tick endpoint runs, and what a local demo can trigger on demand. */
 export async function runTick(businessId: string): Promise<SendCycleResult> {
   const draftsGenerated = await generateDueDrafts(businessId);
   const sendResult = await sendApprovedDrafts(businessId);
@@ -99,6 +102,14 @@ async function sendOneStep(cc: import('../../repositories/campaignContactRepo').
     return 'sent';
   }
 
+  // A contact can be enrolled in more than one campaign (a sheet import and a
+  // Lead's own follow-ups, for example), each with its own step 1. Never let a
+  // second campaign send that first-contact email to someone already reached.
+  if (draft.step_order === 1 && (await outreachMessageRepo.countSentForContact(cc.business_id, contact.id)) > 0) {
+    await campaignContactRepo.setStatus(cc.id, 'stopped', { stoppedReason: 'already_contacted' });
+    return 'blocked';
+  }
+
   const [campaign, emailSettings] = await Promise.all([
     outreachCampaignRepo.findCampaignById(cc.campaign_id, cc.business_id),
     emailSettingsRepo.getSettings(cc.business_id),
@@ -122,7 +133,10 @@ async function sendOneStep(cc: import('../../repositories/campaignContactRepo').
     return 'failed';
   }
 
-  const body = draft.final_body ?? draft.naturalized_body;
+  // The sign-off names whoever approved the draft, so the recipient knows who
+  // they're talking to. The stored Sent copy is exactly what was dispatched.
+  const approver = draft.approved_by ? await userRepo.findUserById(draft.approved_by) : null;
+  const body = withSenderFirstName(draft.final_body ?? draft.naturalized_body, firstNameOf(approver?.name), senderName);
   const message = await outreachMessageRepo.createMessage({
     businessId: cc.business_id,
     campaignContactId: cc.id,
@@ -160,6 +174,12 @@ async function sendOneStep(cc: import('../../repositories/campaignContactRepo').
   await outreachEventRepo.recordEvent({ businessId: cc.business_id, messageId: message.id, type: 'sent' });
   await outreachDraftRepo.setStatus(draft.id, cc.business_id, 'sent');
   await providerUsageRepo.recordSend(cc.business_id, provider.name, 'sent');
+
+  // Automatic New -> Contacted CRM lead transition, only for a contact
+  // that's linked to a real lead (sheet imports, direct lead composer sends).
+  if (contact.lead_id) {
+    await markLeadContacted(cc.business_id, contact.lead_id);
+  }
 
   // Mock provider has no real async delivery webhook — simulate near-instant
   // delivery (or a bounce for addresses that deliberately simulate one) so

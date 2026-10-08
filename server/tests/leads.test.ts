@@ -23,7 +23,6 @@ describe('Lead management', () => {
         email: 'jordan@smithco.test',
         phone: '555-9999',
         source: 'Referral',
-        budget: 10000,
         timeline: 'ASAP',
         interestedIn: 'Custom software',
         description: 'A detailed description of what they need built for their team.',

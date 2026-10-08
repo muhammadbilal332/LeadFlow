@@ -7,7 +7,9 @@ const router = Router();
 
 router.use(requireAuth);
 
-router.get('/', requireRole('owner'), listUsers);
+// Manager can see the team (needed to assign leads to team members) but not
+// create, edit, or deactivate accounts — that stays Owner-only.
+router.get('/', requireRole('owner', 'manager'), listUsers);
 router.post('/', requireRole('owner'), createSalesUser);
 router.patch('/:id', requireRole('owner'), updateUserHandler);
 

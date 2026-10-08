@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { setupTestDatabase } from './testDb';
 import { createApp } from '../src/app';
-import { signupOwner } from './helpers';
+import { signupOwner, createSalesUser } from './helpers';
 
 describe('Outreach platform (mock providers, full pipeline)', () => {
   beforeAll(async () => {
@@ -10,6 +10,15 @@ describe('Outreach platform (mock providers, full pipeline)', () => {
   });
 
   const app = createApp();
+
+  async function createLead(app: ReturnType<typeof createApp>, auth: Record<string, string>, overrides: Partial<{ name: string; email: string }> = {}) {
+    const res = await request(app)
+      .post('/api/leads')
+      .set(auth)
+      .send({ name: overrides.name ?? 'Dana Prospect', email: overrides.email ?? `dana${Date.now()}@leadflow-demo.test`, source: 'Website' });
+    expect(res.status).toBe(201);
+    return res.body.lead;
+  }
 
   it('reports every provider as mock and configured by default', async () => {
     const owner = await signupOwner(app);
@@ -21,126 +30,50 @@ describe('Outreach platform (mock providers, full pipeline)', () => {
     expect(res.body.providers.inbound).toEqual({ name: 'mock', configured: true, selected: 'mock' });
   });
 
-  it('runs the streamlined outreach flow: import -> sequence -> campaign -> auto-draft -> approve -> auto-send on start -> reply -> lead conversion', async () => {
+  it('runs the streamlined direct-lead outreach flow: lead -> AI compose -> approve -> auto-send -> status Contacted -> reply -> status Replied -> follow-up stops', async () => {
     const owner = await signupOwner(app);
     const auth = { Authorization: `Bearer ${owner.token}` };
 
-    // 1. Configure sender defaults.
-    const settingsRes = await request(app)
-      .patch('/api/outreach/settings')
-      .set(auth)
-      .send({ defaultSenderName: 'Alex from LeadFlow', defaultSenderEmail: 'alex@leadflow-demo.test', dailySendLimit: 50 });
-    expect(settingsRes.status).toBe(200);
+    await request(app).patch('/api/outreach/settings').set(auth).send({ defaultSenderName: 'Alex from LeadFlow', defaultSenderEmail: 'alex@leadflow-demo.test', dailySendLimit: 50 });
 
-    // 2. Import contacts from the mock Google Sheet. skipAutoCampaign is
-    // used here since this test exercises the fully-manual path (its own
-    // sequence/campaign/add-contacts steps below) — the default, auto-pilot
-    // behavior is covered separately by the "auto-pilot" test.
-    const importRes = await request(app).post('/api/outreach/imports').set(auth).send({ skipAutoCampaign: true });
-    expect(importRes.status).toBe(201);
-    expect(importRes.body.import.imported_rows).toBeGreaterThan(0);
+    const lead = await createLead(app, auth, { name: 'Dana Prospect', email: 'dana@brightleafroasters.test' });
+    expect(lead.status).toBe('New');
 
-    // 3. Verify contacts were created.
-    const contactsRes = await request(app).get('/api/outreach/contacts').set(auth);
-    expect(contactsRes.status).toBe(200);
-    const targetContact = contactsRes.body.contacts.find((c: any) => c.email === 'dana@brightleafroasters.test');
-    expect(targetContact).toBeTruthy();
-
-    // 4. Re-running the import must not create duplicate contacts.
-    const secondImportRes = await request(app).post('/api/outreach/imports').set(auth).send({ skipAutoCampaign: true });
-    expect(secondImportRes.body.import.duplicate_rows).toBeGreaterThan(0);
-    const contactsAfterSecondImport = await request(app).get('/api/outreach/contacts').set(auth);
-    expect(contactsAfterSecondImport.body.total).toBe(contactsRes.body.total);
-
-    // 5. Create a 2-step sequence.
-    const sequenceRes = await request(app)
-      .post('/api/outreach/sequences')
-      .set(auth)
-      .send({
-        name: 'Cold Intro',
-        steps: [
-          { stepOrder: 1, delayDays: 0, subjectTemplate: 'intro', aiPersonalize: true },
-          { stepOrder: 2, delayDays: 3, subjectTemplate: 'follow-up', aiPersonalize: true },
-        ],
-      });
-    expect(sequenceRes.status).toBe(201);
-    const sequenceId = sequenceRes.body.sequence.id;
-
-    // 6. Create a campaign and attach the sequence.
-    const campaignRes = await request(app)
-      .post('/api/outreach/campaigns')
-      .set(auth)
-      .send({ name: 'Q1 Cold Outreach', senderName: 'Alex', senderEmail: 'alex@leadflow-demo.test', sequenceId });
-    expect(campaignRes.status).toBe(201);
-    expect(campaignRes.body.campaign.status).toBe('draft');
-    const campaignId = campaignRes.body.campaign.id;
-
-    // 7. Adding the contact must immediately produce its step-1 draft — no
-    // separate "generate drafts" click required — but must NOT send anything.
-    const addContactsRes = await request(app)
-      .post(`/api/outreach/campaigns/${campaignId}/contacts`)
-      .set(auth)
-      .send({ contactIds: [targetContact.id] });
-    expect(addContactsRes.status).toBe(200);
-    expect(addContactsRes.body.added).toBe(1);
-    expect(addContactsRes.body.draftsGenerated).toBe(1);
+    // Compose generates (or returns) the step-1 AI draft, never sending anything yet.
+    const composeRes = await request(app).get(`/api/leads/${lead.id}/compose-email`).set(auth);
+    expect(composeRes.status).toBe(200);
+    expect(composeRes.body.draft.subject).toBeTruthy();
+    expect(composeRes.body.stepOrder).toBe(1);
+    const draftId = composeRes.body.draft.id;
 
     const messagesBeforeApproval = await request(app).get('/api/outreach/messages').set(auth);
     expect(messagesBeforeApproval.body.messages).toHaveLength(0);
 
-    // 8. Review the draft.
-    const draftsRes = await request(app).get('/api/outreach/drafts').set(auth);
-    expect(draftsRes.status).toBe(200);
-    expect(draftsRes.body.drafts).toHaveLength(1);
-    const draft = draftsRes.body.drafts[0];
-    expect(draft.subject).toBeTruthy();
-    expect(draft.naturalized_body).toContain('Dana');
-    expect(draft.quality_status).not.toBe('blocked');
+    // Approving sends immediately — the Direct Lead campaign is always running, so there's no separate "start" step.
+    const approveRes = await request(app).post(`/api/outreach/drafts/${draftId}/approve`).set(auth).send({});
+    expect(approveRes.status).toBe(200);
+    expect(approveRes.body.sendOutcome).toBe('sent');
 
-    // 9. A campaign cannot be started before being approved.
-    const startTooEarlyRes = await request(app).post(`/api/outreach/campaigns/${campaignId}/start`).set(auth).send({});
-    expect(startTooEarlyRes.status).toBe(400);
-
-    // 10. Approve the draft — required before ANY send. The campaign is
-    // still only 'review' at this point (not yet started), so approving
-    // does not send it immediately — it waits for the campaign to start.
-    const approveDraftRes = await request(app).post(`/api/outreach/drafts/${draft.id}/approve`).set(auth).send({});
-    expect(approveDraftRes.status).toBe(200);
-    expect(approveDraftRes.body.draft.status).toBe('approved');
-    expect(approveDraftRes.body.sendOutcome).toBe('not_running');
-
-    // 11. Approve the campaign, then start it — starting immediately sends
-    // every already-approved draft, so no separate "process queue" click is
-    // needed for the common case.
-    const approveCampaignRes = await request(app).post(`/api/outreach/campaigns/${campaignId}/approve`).set(auth).send({});
-    expect(approveCampaignRes.status).toBe(200);
-    expect(approveCampaignRes.body.campaign.status).toBe('approved');
-
-    const startRes = await request(app).post(`/api/outreach/campaigns/${campaignId}/start`).set(auth).send({});
-    expect(startRes.status).toBe(200);
-    expect(startRes.body.campaign.status).toBe('running');
-    expect(startRes.body.tickResult.sent).toBe(1);
-
-    // 12. The email was actually sent and (mock) delivered.
     const messagesAfterSend = await request(app).get('/api/outreach/messages').set(auth);
     expect(messagesAfterSend.body.messages).toHaveLength(1);
     expect(messagesAfterSend.body.messages[0].status).toBe('delivered');
 
-    const usageRes = await request(app).get('/api/outreach/usage').set(auth);
-    expect(usageRes.body.usage.sentToday).toBe(1);
+    // New -> Contacted happened automatically on successful send.
+    const leadAfterSend = await request(app).get(`/api/leads/${lead.id}`).set(auth);
+    expect(leadAfterSend.body.lead.status).toBe('Contacted');
 
-    // 13. A retried tick must not double-send (idempotency) — this is the
-    // endpoint n8n calls on a schedule.
-    const secondTickRes = await request(app).post('/api/outreach/tick').set(auth).send({});
-    expect(secondTickRes.body.result.sent).toBe(0);
+    // A retried tick must not double-send (idempotency) — this is the endpoint the external scheduler calls on a schedule.
+    const retryTick = await request(app).post('/api/outreach/tick').set(auth).send({});
+    expect(retryTick.body.result.sent).toBe(0);
     const messagesAfterRetry = await request(app).get('/api/outreach/messages').set(auth);
     expect(messagesAfterRetry.body.messages).toHaveLength(1);
 
-    // 14. Simulate an "interested" reply — this must stop follow-ups and
-    // ensure a lead exists. The sheet import back in step 2 already created
-    // a CRM lead for Dana (every imported contact gets one now), so this
-    // reply reuses and links to that existing lead rather than creating a
-    // second, duplicate one — leadCreated is correctly false here.
+    // The follow-up queue must now show this lead due for its 3-day step.
+    const queueRes = await request(app).get('/api/outreach/follow-up-queue').set(auth);
+    const allQueued = Object.values(queueRes.body.queue).flat() as any[];
+    expect(allQueued.some((item) => item.lead_id === lead.id)).toBe(false); // not due yet (3 days out)
+
+    // An "interested" reply stops follow-ups and bumps status to Replied.
     const replyRes = await request(app)
       .post('/api/outreach/dev/simulate-reply')
       .set(auth)
@@ -149,61 +82,29 @@ describe('Outreach platform (mock providers, full pipeline)', () => {
     expect(replyRes.body.result.classification).toBe('interested');
     expect(replyRes.body.result.leadCreated).toBe(false);
 
-    const leadsRes = await request(app).get('/api/leads?search=Dana').set(auth);
-    expect(leadsRes.body.leads).toHaveLength(1);
-    expect(leadsRes.body.leads[0].email).toBe('dana@brightleafroasters.test');
+    const leadAfterReply = await request(app).get(`/api/leads/${lead.id}`).set(auth);
+    expect(leadAfterReply.body.lead.status).toBe('Replied');
 
-    // 15. Because a reply was received, the campaign contact must stop — the
-    // next tick must NOT generate a step-2 follow-up draft for this contact.
-    const campaignDetailRes = await request(app).get(`/api/outreach/campaigns/${campaignId}`).set(auth);
-    expect(campaignDetailRes.body.contacts[0].status).toBe('stopped');
-
-    const thirdTickRes = await request(app).post('/api/outreach/tick').set(auth).send({});
-    expect(thirdTickRes.body.result.draftsGenerated).toBe(0);
+    // Because a reply was received, no follow-up draft is ever generated for this contact.
+    const tickAfterReply = await request(app).post('/api/outreach/tick').set(auth).send({});
+    expect(tickAfterReply.body.result.draftsGenerated).toBe(0);
   });
 
-  it('blocks a send once a recipient is suppressed before the campaign starts', async () => {
+  it('blocks a send once a recipient is suppressed before the draft is approved', async () => {
     const owner = await signupOwner(app);
     const auth = { Authorization: `Bearer ${owner.token}` };
-
     await request(app).patch('/api/outreach/settings').set(auth).send({ defaultSenderEmail: 'sender@leadflow-demo.test' });
 
-    const contactRes = await request(app)
-      .post('/api/outreach/contacts')
-      .set(auth)
-      .send({ email: 'prospect@suppress-demo.test', contactName: 'Sam Prospect', companyName: 'Suppress Co' });
-    expect(contactRes.status).toBe(201);
+    const lead = await createLead(app, auth, { email: 'prospect@suppress-demo.test' });
+    const composeRes = await request(app).get(`/api/leads/${lead.id}/compose-email`).set(auth);
+    const draftId = composeRes.body.draft.id;
 
-    const sequenceRes = await request(app)
-      .post('/api/outreach/sequences')
-      .set(auth)
-      .send({ name: 'Single Step', steps: [{ stepOrder: 1, delayDays: 0, subjectTemplate: 'hi' }] });
-
-    const campaignRes = await request(app)
-      .post('/api/outreach/campaigns')
-      .set(auth)
-      .send({ name: 'Suppression Test', senderEmail: 'sender@leadflow-demo.test', sequenceId: sequenceRes.body.sequence.id });
-    const campaignId = campaignRes.body.campaign.id;
-
-    await request(app).post(`/api/outreach/campaigns/${campaignId}/contacts`).set(auth).send({ contactIds: [contactRes.body.contact.id] });
-    const draftsRes = await request(app).get('/api/outreach/drafts').set(auth);
-    const draftId = draftsRes.body.drafts[0].id;
-    await request(app).post(`/api/outreach/drafts/${draftId}/approve`).set(auth).send({});
-    await request(app).post(`/api/outreach/campaigns/${campaignId}/approve`).set(auth).send({});
-
-    // Suppress the recipient AFTER approval but BEFORE starting the
-    // campaign. Adding a suppression immediately stops every in-flight
-    // campaign_contact for that email (see suppressionService.suppress), so
-    // this contact never reaches the send phase even though starting the
-    // campaign triggers an immediate send attempt.
+    // Suppress the recipient AFTER drafting but BEFORE approval.
     const suppressRes = await request(app).post('/api/outreach/suppressions').set(auth).send({ email: 'prospect@suppress-demo.test', reason: 'manual' });
     expect(suppressRes.status).toBe(201);
 
-    const campaignDetailRes = await request(app).get(`/api/outreach/campaigns/${campaignId}`).set(auth);
-    expect(campaignDetailRes.body.contacts[0].status).toBe('stopped');
-
-    const startRes = await request(app).post(`/api/outreach/campaigns/${campaignId}/start`).set(auth).send({});
-    expect(startRes.body.tickResult.sent).toBe(0);
+    const approveRes = await request(app).post(`/api/outreach/drafts/${draftId}/approve`).set(auth).send({});
+    expect(approveRes.body.sendOutcome).toBe('blocked');
 
     const messagesRes = await request(app).get('/api/outreach/messages').set(auth);
     expect(messagesRes.body.messages).toHaveLength(0);
@@ -212,20 +113,12 @@ describe('Outreach platform (mock providers, full pipeline)', () => {
   it('flags a draft as blocked when the recipient was already suppressed, and refuses to approve it', async () => {
     const owner = await signupOwner(app);
     const auth = { Authorization: `Bearer ${owner.token}` };
-
     await request(app).patch('/api/outreach/settings').set(auth).send({ defaultSenderEmail: 'sender@leadflow-demo.test' });
     await request(app).post('/api/outreach/suppressions').set(auth).send({ email: 'already-suppressed@leadflow-demo.test', reason: 'manual' });
 
-    const contactRes = await request(app).post('/api/outreach/contacts').set(auth).send({ email: 'already-suppressed@leadflow-demo.test', contactName: 'Pre Suppressed' });
-    const sequenceRes = await request(app).post('/api/outreach/sequences').set(auth).send({ name: 'Seq', steps: [{ stepOrder: 1, delayDays: 0, subjectTemplate: 'hi' }] });
-    const campaignRes = await request(app)
-      .post('/api/outreach/campaigns')
-      .set(auth)
-      .send({ name: 'Pre-suppressed Test', senderEmail: 'sender@leadflow-demo.test', sequenceId: sequenceRes.body.sequence.id });
-    await request(app).post(`/api/outreach/campaigns/${campaignRes.body.campaign.id}/contacts`).set(auth).send({ contactIds: [contactRes.body.contact.id] });
-
-    const draftsRes = await request(app).get('/api/outreach/drafts').set(auth);
-    const draft = draftsRes.body.drafts[0];
+    const lead = await createLead(app, auth, { email: 'already-suppressed@leadflow-demo.test' });
+    const composeRes = await request(app).get(`/api/leads/${lead.id}/compose-email`).set(auth);
+    const draft = composeRes.body.draft;
     expect(draft.quality_status).toBe('blocked');
     expect(draft.quality_issues.some((i: any) => i.code === 'suppressed_recipient')).toBe(true);
 
@@ -236,23 +129,12 @@ describe('Outreach platform (mock providers, full pipeline)', () => {
   it('classifies an unsubscribe reply and permanently suppresses the contact', async () => {
     const owner = await signupOwner(app);
     const auth = { Authorization: `Bearer ${owner.token}` };
-
     await request(app).patch('/api/outreach/settings').set(auth).send({ defaultSenderEmail: 'sender@leadflow-demo.test' });
-    const sequenceRes = await request(app).post('/api/outreach/sequences').set(auth).send({ name: 'Seq', steps: [{ stepOrder: 1, delayDays: 0, subjectTemplate: 'hi' }] });
-    const campaignRes = await request(app)
-      .post('/api/outreach/campaigns')
-      .set(auth)
-      .send({ name: 'Unsub Test', senderEmail: 'sender@leadflow-demo.test', sequenceId: sequenceRes.body.sequence.id });
-    const contactRes = await request(app)
-      .post('/api/outreach/contacts')
-      .set(auth)
-      .send({ email: 'unsub2@leadflow-demo.test', contactName: 'Unsub Two' });
-    await request(app).post(`/api/outreach/campaigns/${campaignRes.body.campaign.id}/contacts`).set(auth).send({ contactIds: [contactRes.body.contact.id] });
-    const draftsRes = await request(app).get('/api/outreach/drafts').set(auth);
-    await request(app).post(`/api/outreach/drafts/${draftsRes.body.drafts[0].id}/approve`).set(auth).send({});
-    await request(app).post(`/api/outreach/campaigns/${campaignRes.body.campaign.id}/approve`).set(auth).send({});
-    const startRes = await request(app).post(`/api/outreach/campaigns/${campaignRes.body.campaign.id}/start`).set(auth).send({});
-    expect(startRes.body.tickResult.sent).toBe(1);
+
+    const lead = await createLead(app, auth, { email: 'unsub2@leadflow-demo.test' });
+    const composeRes = await request(app).get(`/api/leads/${lead.id}/compose-email`).set(auth);
+    const approveRes = await request(app).post(`/api/outreach/drafts/${composeRes.body.draft.id}/approve`).set(auth).send({});
+    expect(approveRes.body.sendOutcome).toBe('sent');
 
     const replyRes = await request(app)
       .post('/api/outreach/dev/simulate-reply')
@@ -267,19 +149,11 @@ describe('Outreach platform (mock providers, full pipeline)', () => {
   it('simulates a hard bounce and auto-suppresses the recipient', async () => {
     const owner = await signupOwner(app);
     const auth = { Authorization: `Bearer ${owner.token}` };
-
     await request(app).patch('/api/outreach/settings').set(auth).send({ defaultSenderEmail: 'sender@leadflow-demo.test' });
-    const contactRes = await request(app).post('/api/outreach/contacts').set(auth).send({ email: 'willbounce@bounce-demo.test', contactName: 'Bouncy' });
-    const sequenceRes = await request(app).post('/api/outreach/sequences').set(auth).send({ name: 'Seq', steps: [{ stepOrder: 1, delayDays: 0, subjectTemplate: 'hi' }] });
-    const campaignRes = await request(app)
-      .post('/api/outreach/campaigns')
-      .set(auth)
-      .send({ name: 'Bounce Test', senderEmail: 'sender@leadflow-demo.test', sequenceId: sequenceRes.body.sequence.id });
-    await request(app).post(`/api/outreach/campaigns/${campaignRes.body.campaign.id}/contacts`).set(auth).send({ contactIds: [contactRes.body.contact.id] });
-    const draftsRes = await request(app).get('/api/outreach/drafts').set(auth);
-    await request(app).post(`/api/outreach/drafts/${draftsRes.body.drafts[0].id}/approve`).set(auth).send({});
-    await request(app).post(`/api/outreach/campaigns/${campaignRes.body.campaign.id}/approve`).set(auth).send({});
-    await request(app).post(`/api/outreach/campaigns/${campaignRes.body.campaign.id}/start`).set(auth).send({});
+
+    const lead = await createLead(app, auth, { email: 'willbounce@bounce-demo.test' });
+    const composeRes = await request(app).get(`/api/leads/${lead.id}/compose-email`).set(auth);
+    await request(app).post(`/api/outreach/drafts/${composeRes.body.draft.id}/approve`).set(auth).send({});
 
     const messagesRes = await request(app).get('/api/outreach/messages').set(auth);
     expect(messagesRes.body.messages[0].status).toBe('bounced');
@@ -291,53 +165,36 @@ describe('Outreach platform (mock providers, full pipeline)', () => {
   it('reports a genuine send rejection as failed (never as sent), and a retried tick reports it as failed again without creating a duplicate message', async () => {
     const owner = await signupOwner(app);
     const auth = { Authorization: `Bearer ${owner.token}` };
-
     await request(app).patch('/api/outreach/settings').set(auth).send({ defaultSenderEmail: 'sender@leadflow-demo.test' });
-    const contactRes = await request(app).post('/api/outreach/contacts').set(auth).send({ email: 'willfail@fail-demo.test', contactName: 'Failure Case' });
-    const sequenceRes = await request(app).post('/api/outreach/sequences').set(auth).send({ name: 'Seq', steps: [{ stepOrder: 1, delayDays: 0, subjectTemplate: 'hi' }] });
-    const campaignRes = await request(app)
-      .post('/api/outreach/campaigns')
-      .set(auth)
-      .send({ name: 'Failure Test', senderEmail: 'sender@leadflow-demo.test', sequenceId: sequenceRes.body.sequence.id });
-    await request(app).post(`/api/outreach/campaigns/${campaignRes.body.campaign.id}/contacts`).set(auth).send({ contactIds: [contactRes.body.contact.id] });
-    const draftsRes = await request(app).get('/api/outreach/drafts').set(auth);
-    await request(app).post(`/api/outreach/drafts/${draftsRes.body.drafts[0].id}/approve`).set(auth).send({});
-    await request(app).post(`/api/outreach/campaigns/${campaignRes.body.campaign.id}/approve`).set(auth).send({});
 
-    const startRes = await request(app).post(`/api/outreach/campaigns/${campaignRes.body.campaign.id}/start`).set(auth).send({});
-    expect(startRes.body.tickResult.failed).toBe(1);
-    expect(startRes.body.tickResult.sent).toBe(0);
+    const lead = await createLead(app, auth, { email: 'willfail@fail-demo.test' });
+    const composeRes = await request(app).get(`/api/leads/${lead.id}/compose-email`).set(auth);
+    const approveRes = await request(app).post(`/api/outreach/drafts/${composeRes.body.draft.id}/approve`).set(auth).send({});
+    expect(approveRes.body.sendOutcome).toBe('failed');
 
     const messagesAfterFirst = await request(app).get('/api/outreach/messages').set(auth);
     expect(messagesAfterFirst.body.messages).toHaveLength(1);
     expect(messagesAfterFirst.body.messages[0].status).toBe('failed');
 
-    // The failed contact must have moved out of 'approved', so a later tick
-    // finds no eligible work for it at all — it must never be rediscovered
-    // and silently retried or double-counted.
+    // The failed campaign_contact must have moved out of 'approved', so a
+    // later tick finds no eligible work for it — never rediscovered or
+    // silently retried / double-counted.
     const secondTick = await request(app).post('/api/outreach/tick').set(auth).send({});
     expect(secondTick.body.result.failed).toBe(0);
     expect(secondTick.body.result.sent).toBe(0);
 
     const messagesAfterSecond = await request(app).get('/api/outreach/messages').set(auth);
     expect(messagesAfterSecond.body.messages).toHaveLength(1);
-
-    const campaignDetail = await request(app).get(`/api/outreach/campaigns/${campaignRes.body.campaign.id}`).set(auth);
-    expect(campaignDetail.body.contacts[0].status).toBe('failed');
   });
 
-  it('blocks sales users from approving campaigns or drafts (owner-only actions)', async () => {
+  it('blocks sales users from creating a sequence (owner-only action)', async () => {
     const owner = await signupOwner(app);
-    const salesCreateRes = await request(app)
-      .post('/api/users')
-      .set('Authorization', `Bearer ${owner.token}`)
-      .send({ name: 'Sales Rep', email: `outreachsales${Date.now()}@test.com`, password: 'password123', role: 'sales' });
-    const loginRes = await request(app).post('/api/auth/login').send({ email: salesCreateRes.body.user.email, password: 'password123' });
+    const sales = await createSalesUser(app, owner.token);
 
     const res = await request(app)
-      .post('/api/outreach/campaigns')
-      .set('Authorization', `Bearer ${loginRes.body.token}`)
-      .send({ name: 'Should fail' });
+      .post('/api/outreach/sequences')
+      .set('Authorization', `Bearer ${sales.token}`)
+      .send({ name: 'Should fail', steps: [{ stepOrder: 1, delayDays: 0, subjectTemplate: 'hi' }] });
     expect(res.status).toBe(403);
   });
 
@@ -422,37 +279,7 @@ describe('Outreach platform (mock providers, full pipeline)', () => {
     expect(allLeadsRes.body.leads.length).toBe(importRes.body.import.imported_rows);
   });
 
-  it('imports straight into a campaign: sheet contacts are added and drafted in one action, with no duplicates on re-import', async () => {
-    const owner = await signupOwner(app);
-    const auth = { Authorization: `Bearer ${owner.token}` };
-
-    await request(app).patch('/api/outreach/settings').set(auth).send({ defaultSenderEmail: 'sender@leadflow-demo.test' });
-    const sequenceRes = await request(app).post('/api/outreach/sequences').set(auth).send({ name: 'Seq', steps: [{ stepOrder: 1, delayDays: 0, subjectTemplate: 'hi' }] });
-    const campaignRes = await request(app)
-      .post('/api/outreach/campaigns')
-      .set(auth)
-      .send({ name: 'Import Into Campaign', senderEmail: 'sender@leadflow-demo.test', sequenceId: sequenceRes.body.sequence.id });
-    const campaignId = campaignRes.body.campaign.id;
-
-    const importRes = await request(app).post('/api/outreach/imports').set(auth).send({ campaignId });
-    expect(importRes.status).toBe(201);
-    expect(importRes.body.import.imported_rows).toBeGreaterThan(0);
-    expect(importRes.body.campaignResult.added).toBe(importRes.body.import.imported_rows);
-    expect(importRes.body.campaignResult.draftsGenerated).toBe(importRes.body.import.imported_rows);
-
-    const draftsRes = await request(app).get(`/api/outreach/drafts?campaignId=${campaignId}`).set(auth);
-    expect(draftsRes.body.drafts.length).toBe(importRes.body.import.imported_rows);
-
-    // Re-importing into the same campaign must not add duplicate campaign_contacts or drafts.
-    const secondImportRes = await request(app).post('/api/outreach/imports').set(auth).send({ campaignId });
-    expect(secondImportRes.body.campaignResult.added).toBe(0);
-    expect(secondImportRes.body.campaignResult.draftsGenerated).toBe(0);
-
-    const draftsAfterSecond = await request(app).get(`/api/outreach/drafts?campaignId=${campaignId}`).set(auth);
-    expect(draftsAfterSecond.body.drafts.length).toBe(draftsRes.body.drafts.length);
-  });
-
-  it('deletes a contact, a sequence, and a campaign (and refuses to delete a sequence in active use)', async () => {
+  it('deletes a contact and a sequence not in active use', async () => {
     const owner = await signupOwner(app);
     const auth = { Authorization: `Bearer ${owner.token}` };
 
@@ -463,23 +290,7 @@ describe('Outreach platform (mock providers, full pipeline)', () => {
     expect(contactsAfterDelete.body.contacts).toHaveLength(0);
 
     const sequenceRes = await request(app).post('/api/outreach/sequences').set(auth).send({ name: 'Deletable Seq', steps: [{ stepOrder: 1, delayDays: 0, subjectTemplate: 'hi' }] });
-    const campaignRes = await request(app)
-      .post('/api/outreach/campaigns')
-      .set(auth)
-      .send({ name: 'Deletable Campaign', sequenceId: sequenceRes.body.sequence.id });
-
-    // A sequence in use by an active (non-cancelled/completed) campaign cannot be deleted.
-    const blockedDeleteRes = await request(app).delete(`/api/outreach/sequences/${sequenceRes.body.sequence.id}`).set(auth);
-    expect(blockedDeleteRes.status).toBe(400);
-
-    const deleteCampaignRes = await request(app).delete(`/api/outreach/campaigns/${campaignRes.body.campaign.id}`).set(auth);
-    expect(deleteCampaignRes.status).toBe(204);
-
-    // Now that no active campaign references it, the sequence can be deleted.
     const deleteSequenceRes = await request(app).delete(`/api/outreach/sequences/${sequenceRes.body.sequence.id}`).set(auth);
     expect(deleteSequenceRes.status).toBe(204);
-
-    const campaignsRes = await request(app).get('/api/outreach/campaigns').set(auth);
-    expect(campaignsRes.body.campaigns.find((c: any) => c.id === campaignRes.body.campaign.id)).toBeUndefined();
   });
 });

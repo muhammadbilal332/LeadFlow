@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import PipelinePage from '../pages/PipelinePage';
 import { ToastProvider } from '../hooks/useToast';
@@ -13,7 +12,7 @@ vi.mock('../services/dashboardApi');
 vi.mock('../services/leadsApi');
 
 const sampleLead: Lead = sampleLeadFixture({
-  assigned_user_name: 'Alex', name: 'Pipeline Lead', company: 'Acme', budget: '1000', score: 55,
+  assigned_user_name: 'Alex', name: 'Pipeline Lead', company: 'Acme', score: 55,
 });
 
 describe('PipelinePage', () => {
@@ -45,7 +44,7 @@ describe('PipelinePage', () => {
     expect(await screen.findByText('Pipeline Lead')).toBeInTheDocument();
   });
 
-  it('moves a lead to a new status via its dropdown', async () => {
+  it('moves a lead to a new status by dragging its card onto a column', async () => {
     vi.mocked(dashboardApi.getPipeline).mockResolvedValue({
       columns: [
         { status: 'New', leads: [sampleLead] },
@@ -59,7 +58,38 @@ describe('PipelinePage', () => {
     });
     vi.mocked(leadsApi.updateLead).mockResolvedValue({ lead: { ...sampleLead, status: 'Contacted' } });
 
-    const user = userEvent.setup();
+    const { container } = render(
+      <MemoryRouter>
+        <ToastProvider>
+          <PipelinePage />
+        </ToastProvider>
+      </MemoryRouter>
+    );
+
+    const card = (await screen.findByText('Pipeline Lead')).closest('a')!;
+    const contactedColumn = container.querySelector('a[href="/leads?status=Contacted"]')!.closest('.rounded-2xl')!;
+
+    fireEvent.dragStart(card);
+    fireEvent.drop(contactedColumn);
+
+    await waitFor(() => {
+      expect(leadsApi.updateLead).toHaveBeenCalledWith('lead-1', { status: 'Contacted' });
+    });
+  });
+
+  it('a lead card links to the lead detail page and has no status dropdown', async () => {
+    vi.mocked(dashboardApi.getPipeline).mockResolvedValue({
+      columns: [
+        { status: 'New', leads: [sampleLead] },
+        { status: 'Contacted', leads: [] },
+        { status: 'Qualified', leads: [] },
+        { status: 'Proposal', leads: [] },
+        { status: 'Negotiation', leads: [] },
+        { status: 'Won', leads: [] },
+        { status: 'Lost', leads: [] },
+      ],
+    });
+
     render(
       <MemoryRouter>
         <ToastProvider>
@@ -68,11 +98,8 @@ describe('PipelinePage', () => {
       </MemoryRouter>
     );
 
-    await screen.findByText('Pipeline Lead');
-    await user.selectOptions(screen.getByLabelText(/change status for pipeline lead/i), 'Contacted');
-
-    await waitFor(() => {
-      expect(leadsApi.updateLead).toHaveBeenCalledWith('lead-1', { status: 'Contacted' });
-    });
+    const card = (await screen.findByText('Pipeline Lead')).closest('a');
+    expect(card).toHaveAttribute('href', '/leads/lead-1');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 });

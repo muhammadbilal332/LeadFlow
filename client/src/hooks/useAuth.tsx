@@ -8,7 +8,6 @@ interface AuthContextValue {
   business: Business | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (input: authApi.SignupInput) => Promise<void>;
   logout: () => void;
   refreshBusiness: () => Promise<void>;
 }
@@ -56,12 +55,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     await loadCurrentUser();
   }, [loadCurrentUser]);
 
-  const signup = useCallback(async (input: authApi.SignupInput) => {
-    const res = await authApi.signup(input);
-    setToken(res.token);
-    await loadCurrentUser();
-  }, [loadCurrentUser]);
-
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
@@ -74,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, business, loading, login, signup, logout, refreshBusiness }}>
+    <AuthContext.Provider value={{ user, business, loading, login, logout, refreshBusiness }}>
       {children}
     </AuthContext.Provider>
   );

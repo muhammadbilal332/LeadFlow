@@ -14,9 +14,7 @@ import * as leadRepo from '../repositories/leadRepo';
 import * as noteRepo from '../repositories/noteRepo';
 import * as activityRepo from '../repositories/activityRepo';
 import * as followUpRepo from '../repositories/followUpRepo';
-import * as aiQualRepo from '../repositories/aiQualificationRepo';
 import { calculateLeadScore, priorityFromScore } from '../services/scoringService';
-import { qualifyLeadWithAi, AiNotConfiguredError } from '../services/aiService';
 import { ForbiddenError, NotFoundError, BadRequestError } from '../utils/appError';
 import { parseCsvToObjects, toCsv } from '../services/csvService';
 import { intakeLead } from '../services/leadIntakeService';
@@ -60,10 +58,10 @@ export const createLead = asyncHandler(async (req: Request, res: Response) => {
   const input = createLeadSchema.parse(req.body);
 
   // All lead creation — manual or otherwise — flows through the central
-  // Lead Intake Service: scoring, duplicate detection, campaign resolution,
-  // automatic assignment (routing rules / round robin), SLA follow-up, and
-  // automation rules. An explicit assignedUserId (including a sales user
-  // creating their own lead) bypasses routing rules.
+  // Lead Intake Service: scoring, duplicate detection, automatic assignment
+  // (routing rules / round robin), SLA follow-up, and automation rules. An
+  // explicit assignedUserId (including a sales user creating their own
+  // lead) bypasses routing rules.
   const result = await intakeLead({
     businessId: req.user!.businessId,
     name: input.name,
@@ -73,7 +71,6 @@ export const createLead = asyncHandler(async (req: Request, res: Response) => {
     source: input.source,
     industry: input.industry,
     interestedIn: input.interestedIn,
-    budget: input.budget ?? null,
     timeline: input.timeline,
     description: input.description,
     assignedUserId: input.assignedUserId ?? (req.user!.role === 'sales' ? req.user!.userId : null),
@@ -97,7 +94,6 @@ export const updateLead = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const merged = {
-    budget: input.budget ?? Number(existing.budget ?? 0),
     timeline: input.timeline ?? existing.timeline,
     email: input.email ?? existing.email,
     phone: input.phone ?? existing.phone,
@@ -146,8 +142,8 @@ export const updateLead = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const deleteLead = asyncHandler(async (req: Request, res: Response) => {
-  if (req.user!.role !== 'owner') {
-    throw new ForbiddenError('Only owners can delete leads');
+  if (req.user!.role !== 'owner' && req.user!.role !== 'manager') {
+    throw new ForbiddenError('Only owners and managers can delete leads');
   }
   const deleted = await leadRepo.deleteLead(req.params.id, req.user!.businessId);
   if (!deleted) throw new NotFoundError('Lead not found');
@@ -204,60 +200,6 @@ export const getLeadFollowUps = asyncHandler(async (req: Request, res: Response)
   res.json({ followUps });
 });
 
-export const qualifyLeadAi = asyncHandler(async (req: Request, res: Response) => {
-  const lead = await assertLeadAccess(req, req.params.id);
-
-  try {
-    const result = await qualifyLeadWithAi({
-      name: lead.name,
-      company: lead.company,
-      industry: lead.industry,
-      source: lead.source,
-      interestedIn: lead.interested_in,
-      budget: lead.budget,
-      timeline: lead.timeline,
-      description: lead.description,
-    });
-
-    const record = await aiQualRepo.createAiQualification({
-      businessId: req.user!.businessId,
-      leadId: lead.id,
-      score: result.score,
-      qualification: result.qualification,
-      summary: result.summary,
-      reasoning: result.reasoning,
-      recommendedAction: result.recommendedAction,
-      strengths: result.strengths,
-      concerns: result.concerns,
-      urgency: result.urgency,
-      suggestedResponse: result.suggestedResponse,
-      estimatedPriority: result.estimatedPriority,
-    });
-
-    await activityRepo.createActivity({
-      businessId: req.user!.businessId,
-      leadId: lead.id,
-      userId: req.user!.userId,
-      type: 'AI qualification completed',
-      description: `AI assessed this lead as ${result.qualification} (score ${result.score}).`,
-    });
-
-    res.json({ qualification: record });
-  } catch (err) {
-    if (err instanceof AiNotConfiguredError) {
-      res.status(422).json({ error: err.message, configured: false });
-      return;
-    }
-    throw err;
-  }
-});
-
-export const getLatestAiQualification = asyncHandler(async (req: Request, res: Response) => {
-  await assertLeadAccess(req, req.params.id);
-  const record = await aiQualRepo.findLatestAiQualification(req.params.id, req.user!.businessId);
-  res.json({ qualification: record });
-});
-
 export const importLeads = asyncHandler(async (req: Request, res: Response) => {
   const csvText = (req.body?.csv as string) ?? '';
   if (!csvText.trim()) {
@@ -277,7 +219,6 @@ export const importLeads = asyncHandler(async (req: Request, res: Response) => {
     }
     const data = parsedRow.data;
     const source = (LEAD_SOURCES as readonly string[]).includes(data.source) ? data.source : 'CSV';
-    const budget = data.budget ? Number(data.budget) : null;
 
     try {
       await intakeLead({
@@ -289,7 +230,6 @@ export const importLeads = asyncHandler(async (req: Request, res: Response) => {
         source,
         industry: data.industry || null,
         interestedIn: data.interested_in || null,
-        budget: budget && !Number.isNaN(budget) ? budget : null,
         timeline: data.timeline || null,
         description: data.description || null,
         externalSource: 'csv',
@@ -342,7 +282,7 @@ export const exportLeads = asyncHandler(async (req: Request, res: Response) => {
     restrictToUserId: scopeForRole(req),
   });
 
-  const headers = ['name', 'company', 'email', 'phone', 'source', 'industry', 'interested_in', 'budget', 'timeline', 'status', 'score', 'assigned_user_name', 'created_at'];
+  const headers = ['name', 'company', 'email', 'phone', 'industry', 'interested_in', 'timeline', 'status', 'score', 'assigned_user_name', 'created_at'];
   const csv = toCsv(headers, rows as unknown as Array<Record<string, unknown>>);
 
   res.setHeader('Content-Type', 'text/csv');

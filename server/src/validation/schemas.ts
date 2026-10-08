@@ -4,20 +4,9 @@ export const LEAD_SOURCES = [
   'Website', 'WhatsApp', 'Facebook', 'Instagram', 'Phone', 'Referral', 'Other',
   'GoogleAds', 'Manual', 'CSV', 'API', 'Form', 'GoogleSheet',
 ] as const;
-export const LEAD_STATUSES = ['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'] as const;
+export const LEAD_STATUSES = ['New', 'Contacted', 'Replied', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'] as const;
 export const FOLLOW_UP_TYPES = ['Call', 'Email', 'Meeting', 'WhatsApp', 'Other'] as const;
 export const QUOTATION_STATUSES = ['Draft', 'Sent', 'Accepted', 'Rejected'] as const;
-
-export const signupSchema = z.object({
-  businessName: z.string().trim().min(2, 'Business name must be at least 2 characters').max(200),
-  name: z.string().trim().min(2, 'Name must be at least 2 characters').max(200),
-  email: z.string().trim().toLowerCase().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters').max(200),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Passwords do not match',
-  path: ['confirmPassword'],
-});
 
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('Invalid email address'),
@@ -32,10 +21,10 @@ export const createLeadSchema = z.object({
   source: z.enum(LEAD_SOURCES).default('Other'),
   industry: z.string().trim().max(200).optional().nullable(),
   interestedIn: z.string().trim().max(500).optional().nullable(),
-  budget: z.coerce.number().nonnegative().optional().nullable(),
   timeline: z.string().trim().max(200).optional().nullable(),
   description: z.string().trim().max(5000).optional().nullable(),
   assignedUserId: z.string().uuid().optional().nullable(),
+  linkedinUrl: z.string().trim().max(500).optional().nullable(),
 });
 
 export const updateLeadSchema = z.object({
@@ -46,11 +35,11 @@ export const updateLeadSchema = z.object({
   source: z.enum(LEAD_SOURCES).optional(),
   industry: z.string().trim().max(200).optional().nullable(),
   interestedIn: z.string().trim().max(500).optional().nullable(),
-  budget: z.coerce.number().nonnegative().optional().nullable(),
   timeline: z.string().trim().max(200).optional().nullable(),
   description: z.string().trim().max(5000).optional().nullable(),
   assignedUserId: z.string().uuid().optional().nullable(),
   status: z.enum(LEAD_STATUSES).optional(),
+  linkedinUrl: z.string().trim().max(500).optional().nullable(),
 });
 
 export const leadQuerySchema = z.object({
@@ -63,7 +52,6 @@ export const leadQuerySchema = z.object({
   minScore: z.coerce.number().int().min(0).max(100).optional(),
   maxScore: z.coerce.number().int().min(0).max(100).optional(),
   priority: z.enum(['Low', 'Medium', 'High', 'Hot']).optional(),
-  campaignId: z.string().uuid().optional(),
   slaStatus: z.enum(['Pending', 'Met', 'Missed']).optional(),
   unworkedOnly: z.coerce.boolean().optional(),
   sortBy: z.enum(['created_at', 'name', 'score', 'status', 'company']).default('created_at'),
@@ -97,7 +85,7 @@ export const createUserSchema = z.object({
   name: z.string().trim().min(2).max(200),
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8).max(200),
-  role: z.enum(['owner', 'sales']).default('sales'),
+  role: z.enum(['owner', 'sales', 'manager']).default('sales'),
 });
 
 export const updateUserSchema = z.object({
@@ -279,7 +267,6 @@ export const csvLeadRowSchema = z.object({
   source: z.string().trim().optional().default('Other'),
   industry: z.string().trim().optional().default(''),
   interested_in: z.string().trim().optional().default(''),
-  budget: z.string().trim().optional().default(''),
   timeline: z.string().trim().optional().default(''),
   description: z.string().trim().optional().default(''),
 });

@@ -1,14 +1,6 @@
 import { apiRequest } from '../lib/api';
 import { User, Business } from '../types';
 
-export interface SignupInput {
-  businessName: string;
-  name: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-}
-
 export interface LoginInput {
   email: string;
   password: string;
@@ -18,10 +10,6 @@ export interface AuthResponse {
   token: string;
   user: { id: string; name: string; email: string; role: string; businessId: string };
   business?: { id: string; name: string };
-}
-
-export function signup(input: SignupInput): Promise<AuthResponse> {
-  return apiRequest('/auth/signup', { method: 'POST', body: input });
 }
 
 export function login(input: LoginInput): Promise<AuthResponse> {

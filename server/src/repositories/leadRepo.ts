@@ -11,7 +11,6 @@ export interface LeadRow {
   source: string;
   industry: string | null;
   interested_in: string | null;
-  budget: string | null;
   timeline: string | null;
   description: string | null;
   status: string;
@@ -20,7 +19,6 @@ export interface LeadRow {
   updated_at: string;
   source_detail: string | null;
   form_id: string | null;
-  campaign_id: string | null;
   campaign: string | null;
   ad_set: string | null;
   ad: string | null;
@@ -43,6 +41,7 @@ export interface LeadRow {
   response_time_seconds: number | null;
   sla_due_at: string | null;
   sla_status: 'Pending' | 'Met' | 'Missed';
+  linkedin_url: string | null;
 }
 
 export interface LeadWithAssignee extends LeadRow {
@@ -59,7 +58,6 @@ export interface LeadFilters {
   minScore?: number;
   maxScore?: number;
   priority?: string;
-  campaignId?: string;
   slaStatus?: string;
   /** Inbox view: unworked leads (status New) that have not yet had a first contact recorded. */
   unworkedOnly?: boolean;
@@ -78,7 +76,8 @@ const SORT_COLUMNS: Record<string, string> = {
 };
 
 export async function listLeads(businessId: string, filters: LeadFilters): Promise<{ rows: LeadWithAssignee[]; total: number }> {
-  const conditions: string[] = ['l.business_id = $1'];
+  // Merged duplicates stay in the database for audit but never show as leads.
+  const conditions: string[] = ['l.business_id = $1', 'l.duplicate_of_lead_id IS NULL'];
   const values: unknown[] = [businessId];
   let idx = 2;
 
@@ -121,11 +120,6 @@ export async function listLeads(businessId: string, filters: LeadFilters): Promi
   if (filters.priority) {
     conditions.push(`l.priority = $${idx++}`);
     values.push(filters.priority);
-  }
-
-  if (filters.campaignId) {
-    conditions.push(`l.campaign_id = $${idx++}`);
-    values.push(filters.campaignId);
   }
 
   if (filters.slaStatus) {
@@ -182,14 +176,12 @@ export interface CreateLeadInput {
   source: string;
   industry?: string | null;
   interestedIn?: string | null;
-  budget?: number | null;
   timeline?: string | null;
   description?: string | null;
   score: number;
   status?: string;
   sourceDetail?: string | null;
   formId?: string | null;
-  campaignId?: string | null;
   campaign?: string | null;
   adSet?: string | null;
   ad?: string | null;
@@ -207,23 +199,24 @@ export interface CreateLeadInput {
   duplicateOfLeadId?: string | null;
   priority?: string;
   slaDueAt?: string | null;
+  linkedinUrl?: string | null;
 }
 
 export async function createLead(input: CreateLeadInput): Promise<LeadRow> {
   const result = await query<LeadRow>(
     `INSERT INTO leads (
       business_id, assigned_user_id, name, company, email, phone, source,
-      industry, interested_in, budget, timeline, description, score, status,
-      source_detail, form_id, campaign_id, campaign, ad_set, ad,
+      industry, interested_in, timeline, description, score, status,
+      source_detail, form_id, campaign, ad_set, ad,
       utm_source, utm_medium, utm_campaign, utm_term, utm_content,
       landing_page, referrer, captured_at, external_source, external_id,
-      normalized_email, normalized_phone, duplicate_of_lead_id, priority, sla_due_at
+      normalized_email, normalized_phone, duplicate_of_lead_id, priority, sla_due_at, linkedin_url
     ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-      $15,$16,$17,$18,$19,$20,
-      $21,$22,$23,$24,$25,
-      $26,$27, now(), $28,$29,
-      $30,$31,$32,$33,$34
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
+      $14,$15,$16,$17,$18,
+      $19,$20,$21,$22,$23,
+      $24,$25, now(), $26,$27,
+      $28,$29,$30,$31,$32,$33
     )
     RETURNING *`,
     [
@@ -236,14 +229,12 @@ export async function createLead(input: CreateLeadInput): Promise<LeadRow> {
       input.source,
       input.industry ?? null,
       input.interestedIn ?? null,
-      input.budget ?? null,
       input.timeline ?? null,
       input.description ?? null,
       input.score,
       input.status ?? 'New',
       input.sourceDetail ?? null,
       input.formId ?? null,
-      input.campaignId ?? null,
       input.campaign ?? null,
       input.adSet ?? null,
       input.ad ?? null,
@@ -261,6 +252,7 @@ export async function createLead(input: CreateLeadInput): Promise<LeadRow> {
       input.duplicateOfLeadId ?? null,
       input.priority ?? 'Medium',
       input.slaDueAt ?? null,
+      input.linkedinUrl ?? null,
     ]
   );
   return result.rows[0];
@@ -445,12 +437,12 @@ export interface UpdateLeadInput {
   source?: string;
   industry?: string | null;
   interestedIn?: string | null;
-  budget?: number | null;
   timeline?: string | null;
   description?: string | null;
   status?: string;
   score?: number;
   priority?: string;
+  linkedinUrl?: string | null;
 }
 
 const FIELD_TO_COLUMN: Record<string, string> = {
@@ -462,12 +454,12 @@ const FIELD_TO_COLUMN: Record<string, string> = {
   source: 'source',
   industry: 'industry',
   interestedIn: 'interested_in',
-  budget: 'budget',
   timeline: 'timeline',
   description: 'description',
   status: 'status',
   score: 'score',
   priority: 'priority',
+  linkedinUrl: 'linkedin_url',
 };
 
 export async function updateLead(id: string, businessId: string, input: UpdateLeadInput): Promise<LeadRow | null> {
@@ -530,43 +522,43 @@ export async function leadsOverTime(businessId: string, days: number): Promise<A
   return result.rows.map((r) => ({ date: r.date, count: Number(r.count) }));
 }
 
-export async function pipelineValueByStatus(businessId: string): Promise<Array<{ status: string; value: number }>> {
-  const result = await query<{ status: string; value: string }>(
-    `SELECT status, COALESCE(SUM(budget), 0)::text AS value FROM leads WHERE business_id = $1 GROUP BY status`,
-    [businessId]
-  );
-  return result.rows.map((r) => ({ status: r.status, value: Number(r.value) }));
-}
-
 export async function salespersonPerformance(businessId: string): Promise<
-  Array<{ userId: string; name: string; totalLeads: number; won: number; lost: number; pipelineValue: number }>
+  Array<{ userId: string; name: string; role: string; totalLeads: number; won: number; lost: number }>
 > {
   const result = await query<{
     user_id: string;
     name: string;
+    role: string;
     total_leads: string;
     won: string;
     lost: string;
-    pipeline_value: string;
   }>(
-    `SELECT u.id AS user_id, u.name,
+    `SELECT u.id AS user_id, u.name, u.role,
             COUNT(l.id)::text AS total_leads,
             COALESCE(SUM(CASE WHEN l.status = 'Won' THEN 1 ELSE 0 END), 0)::text AS won,
-            COALESCE(SUM(CASE WHEN l.status = 'Lost' THEN 1 ELSE 0 END), 0)::text AS lost,
-            COALESCE(SUM(CASE WHEN l.status NOT IN ('Won','Lost') THEN l.budget ELSE 0 END), 0)::text AS pipeline_value
+            COALESCE(SUM(CASE WHEN l.status = 'Lost' THEN 1 ELSE 0 END), 0)::text AS lost
      FROM users u
      LEFT JOIN leads l ON l.assigned_user_id = u.id AND l.business_id = u.business_id
      WHERE u.business_id = $1
-     GROUP BY u.id, u.name
+     GROUP BY u.id, u.name, u.role
      ORDER BY u.name`,
     [businessId]
   );
   return result.rows.map((r) => ({
     userId: r.user_id,
     name: r.name,
+    role: r.role,
     totalLeads: Number(r.total_leads),
     won: Number(r.won),
     lost: Number(r.lost),
-    pipelineValue: Number(r.pipeline_value),
   }));
+}
+
+/** Everyone in the business, used to show each team member's performance card. */
+export async function listTeamMembers(businessId: string): Promise<Array<{ userId: string; name: string; role: string }>> {
+  const result = await query<{ user_id: string; name: string; role: string }>(
+    `SELECT id AS user_id, name, role FROM users WHERE business_id = $1 ORDER BY name`,
+    [businessId]
+  );
+  return result.rows.map((r) => ({ userId: r.user_id, name: r.name, role: r.role }));
 }

@@ -4,9 +4,9 @@
     {
       "name": "leadflow-client",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "client", "--", "--port", "5199", "--strictPort"],
-      "port": 5199,
-      "url": "http://localhost:5199"
+      "runtimeArgs": ["run", "dev", "--prefix", "client", "--", "--port", "5210", "--strictPort"],
+      "port": 5210,
+      "url": "http://localhost:5210"
     }
   ]
 }

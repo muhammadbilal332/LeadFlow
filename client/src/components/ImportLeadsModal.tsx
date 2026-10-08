@@ -58,7 +58,7 @@ export default function ImportLeadsModal({ onClose, onImported }: ImportLeadsMod
         </div>
 
         <p className="mt-1 text-sm text-slate-500">
-          Upload a CSV with columns: name, company, email, phone, source, industry, interested_in, budget, timeline, description.
+          Upload a CSV with columns: name, company, email, phone, industry, interested_in, timeline, description.
         </p>
         <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
           Bulk-imported leads skip your lead routing and automation rules (Settings → Lead routing / Automations), so they won't be auto-assigned or trigger automated follow-ups — this avoids a notification storm when importing many rows at once. Assign and route them manually, or add leads one at a time if you want rules to apply.

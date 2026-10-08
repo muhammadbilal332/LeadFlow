@@ -1,9 +1,16 @@
 # LeadFlow Developer/Admin Dashboard
 
 A platform-level console, separate from the CRM, where the system owner can
-monitor and manage the entire LeadFlow platform — every business, every
-user, every lead, the outreach pipeline, and the n8n/provider integrations
-— from one place.
+monitor LeadFlow's own operation — users, the outreach pipeline, the
+scheduler/provider integrations, health, and logs — from one place.
+
+LeadFlow is a standalone single-business application (one deployment, one
+`businesses` row for the real business — currently SellerClutch — plus one
+scaffolding business that exists only to hold the `developer` account; see
+"Business management" below). This console used to also manage multiple
+customer businesses on a shared platform; that cross-business
+administration was removed when LeadFlow was converted to standalone. What
+remains here is operational monitoring, not tenant administration.
 
 ## Architecture: one auth system, not two
 
@@ -53,61 +60,51 @@ existing in the database.
 
 - **Migrations**: `database/migrations/011_developer_dashboard.sql` — adds
   `developer` to the `users.role` check constraint, plus three new tables:
-  `developer_audit_logs`, `system_events`, `n8n_execution_logs`.
+  `developer_audit_logs`, `system_events`, `automation_execution_logs`
+  (originally `n8n_execution_logs`, renamed in `019_rename_automation_execution_logs.sql`
+  once LeadFlow stopped depending specifically on n8n for scheduling).
   `012_business_status.sql` — adds `businesses.is_active`. Both purely
   additive; no existing table, column, or row is altered.
-- **API**: `/api/developer/*` — overview, businesses (+ deactivate,
-  reactivate, delete), users (+ role change, enable/disable), leads
-  (cross-tenant, read-only, every view audited), outreach lifecycle, n8n
-  status, health, providers, usage, logs, audit.
-- **Frontend**: `/developer/login` and `/developer/*` (Overview,
-  Businesses, Business detail, Users, Leads, Outreach, n8n, Health,
-  Providers, Usage, Logs, Audit, Settings), with their own layout and
-  navigation, entirely separate from the CRM's `AppLayout`.
+- **API**: `/api/developer/*` — overview, users (+ role change,
+  enable/disable), outreach lifecycle, scheduler status, health, providers,
+  usage, logs, audit.
+- **Frontend**: `/developer/login` and `/developer/*` (Overview, Users,
+  Outreach, Automation Scheduler, Health, Providers, Usage, Logs, Audit,
+  Settings), with their own layout and navigation, entirely separate from
+  the CRM's `AppLayout`.
 
-## Business management
+## Business management (removed)
 
-A developer can deactivate, reactivate, or permanently delete any tenant
-business from the Businesses list or a business's detail page:
+Earlier versions of this console let a developer list every business on the
+platform and deactivate, reactivate, or permanently delete any of them
+(`/api/developer/businesses*`), plus browse leads across every business
+(`/api/developer/leads`, cross-tenant). Both were removed when LeadFlow was
+converted to a standalone single-business application — there is no longer
+a second business to switch to or administer. The only remaining
+multi-row fact about the `businesses` table is the scaffolding row that
+holds the `developer` account itself (see "Setting up the developer
+account" above); it has no CRM data and is never shown as a tenant to
+manage.
 
-- **Deactivate** sets `businesses.is_active = false`. Every user of that
-  business is immediately blocked from logging in (`authController.login`
-  checks the business's status right after the password check, and returns
-  the same generic "Invalid email or password" either way, so a locked-out
-  account can't be distinguished from a wrong password by probing). This is
-  reversible — **Reactivate** restores access instantly.
-- **Delete** permanently removes the business and cascades to everything
-  under it (users, leads, outreach campaigns/messages) via the existing
-  `ON DELETE CASCADE` foreign keys. This is a two-step, deliberately
-  irreversible action: the API refuses to delete a business that is still
-  active (400 "Deactivate this business before deleting it"), so a business
-  can never be deleted in a single click. The frontend's Delete button is
-  disabled while a business is active, for the same reason.
-- Every deactivate, reactivate, and delete is recorded to
-  `developer_audit_logs`.
+`businesses.is_active` and the login check that blocks a deactivated
+business's users still exist in the schema and in
+`authController.login` — there is just no UI/API path to toggle it
+anymore. It remains available as a manual, direct-database kill switch if
+the real business's account ever needs an emergency lockout.
 
-## Cross-tenant lead visibility is audited, not restricted
+## Automation scheduler connection status — how it's really determined
 
-The Leads page intentionally keeps full cross-tenant visibility — it exists
-for platform support (debugging a customer's pipeline, verifying import
-results) and restricting it would defeat that purpose. Since that means a
-developer can see real customer lead data, **every view is logged**: each
-call to `GET /api/developer/leads` writes a `developer_viewed_leads` audit
-entry recording which business/filter/page was viewed and how many results
-came back — so the Audit Logs page is a complete record of who looked at
-customer data, when, and why. This is a deliberate trade-off (visibility
-for support usefulness, audited for accountability) rather than a gap.
-
-## n8n connection status — how it's really determined
-
-LeadFlow never calls n8n directly (n8n calls LeadFlow's
+LeadFlow never calls the scheduler directly (the scheduler calls LeadFlow's
 `POST /api/outreach/tick`), so there's no outbound health check to make.
 Instead, every call to that endpoint — success or failure — is recorded to
-`n8n_execution_logs` with who triggered it (`api_key` = a real external
-caller like n8n, vs `jwt` = someone using the LeadFlow UI's own "Process
-queue" button). The dashboard reports **CONNECTED** only when there's been
-at least one `api_key`-triggered execution in the last 24 hours — never
-just because the route exists or because the UI itself has been clicked.
+`automation_execution_logs` (originally `n8n_execution_logs` — renamed once
+LeadFlow stopped depending on n8n specifically; the table was always
+scheduler-agnostic) with who triggered it
+(`api_key` = a real external caller, vs `jwt` = someone using the LeadFlow
+UI's own "Process queue" button). The dashboard reports **CONNECTED** only
+when there's been at least one `api_key`-triggered execution in the last 24
+hours — never just because the route exists or because the UI itself has
+been clicked.
 
 ## Security notes
 

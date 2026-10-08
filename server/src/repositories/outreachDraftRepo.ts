@@ -56,18 +56,27 @@ export async function listForCampaignContact(campaignContactId: string): Promise
   return result.rows;
 }
 
-export async function listPendingReview(businessId: string, campaignId?: string): Promise<OutreachDraftRow[]> {
+/** A draft plus who it is addressed to, so the review screen shows the recipient's name, email and company. */
+export interface OutreachDraftWithRecipient extends OutreachDraftRow {
+  recipient_name: string | null;
+  recipient_email: string;
+  company_name: string | null;
+  lead_id: string | null;
+}
+
+export async function listPendingReview(businessId: string, campaignId?: string): Promise<OutreachDraftWithRecipient[]> {
+  const select = `SELECT d.*, oc.contact_name AS recipient_name, oc.email AS recipient_email, oc.company_name, oc.lead_id
+     FROM outreach_drafts d
+     JOIN outreach_campaign_contacts cc ON cc.id = d.campaign_contact_id
+     JOIN outreach_contacts oc ON oc.id = cc.contact_id`;
   if (campaignId) {
-    const result = await query<OutreachDraftRow>(
-      `SELECT d.* FROM outreach_drafts d
-       JOIN outreach_campaign_contacts cc ON cc.id = d.campaign_contact_id
-       WHERE d.business_id = $1 AND d.status = 'draft' AND cc.campaign_id = $2
-       ORDER BY d.created_at ASC`,
+    const result = await query<OutreachDraftWithRecipient>(
+      `${select} WHERE d.business_id = $1 AND d.status = 'draft' AND cc.campaign_id = $2 ORDER BY d.created_at ASC`,
       [businessId, campaignId]
     );
     return result.rows;
   }
-  const result = await query<OutreachDraftRow>(`SELECT * FROM outreach_drafts WHERE business_id = $1 AND status = 'draft' ORDER BY created_at ASC`, [businessId]);
+  const result = await query<OutreachDraftWithRecipient>(`${select} WHERE d.business_id = $1 AND d.status = 'draft' ORDER BY d.created_at ASC`, [businessId]);
   return result.rows;
 }
 

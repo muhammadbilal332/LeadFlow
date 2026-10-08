@@ -10,8 +10,9 @@ import AuthLayout from './layouts/AuthLayout';
 import DeveloperLayout from './layouts/DeveloperLayout';
 
 import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
 import DashboardPage from './pages/DashboardPage';
+import PersonEmailsPage from './pages/PersonEmailsPage';
+import PersonEmailDetailPage from './pages/PersonEmailDetailPage';
 import LeadsPage from './pages/LeadsPage';
 import NewLeadPage from './pages/NewLeadPage';
 import LeadDetailPage from './pages/LeadDetailPage';
@@ -25,29 +26,21 @@ import SettingsAutomationsPage from './pages/SettingsAutomationsPage';
 import SettingsIntegrationsPage from './pages/SettingsIntegrationsPage';
 import SettingsApiKeysPage from './pages/SettingsApiKeysPage';
 import InboxPage from './pages/InboxPage';
-import FormsPage from './pages/FormsPage';
-import FormEditorPage from './pages/FormEditorPage';
+import SentPage from './pages/SentPage';
+import NewLeadsQueuePage from './pages/NewLeadsQueuePage';
 import PublicFormPage from './pages/PublicFormPage';
-import CampaignsPage from './pages/CampaignsPage';
-import CampaignDetailPage from './pages/CampaignDetailPage';
 import OutreachOverviewPage from './pages/OutreachOverviewPage';
 import OutreachContactsPage from './pages/OutreachContactsPage';
 import OutreachSequencesPage from './pages/OutreachSequencesPage';
-import OutreachCampaignsPage from './pages/OutreachCampaignsPage';
-import OutreachCampaignDetailPage from './pages/OutreachCampaignDetailPage';
 import OutreachDraftsPage from './pages/OutreachDraftsPage';
-import OutreachRepliesPage from './pages/OutreachRepliesPage';
 import OutreachSuppressionsPage from './pages/OutreachSuppressionsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 import DeveloperLoginPage from './pages/developer/DeveloperLoginPage';
 import DeveloperOverviewPage from './pages/developer/DeveloperOverviewPage';
-import DeveloperBusinessesPage from './pages/developer/DeveloperBusinessesPage';
-import DeveloperBusinessDetailPage from './pages/developer/DeveloperBusinessDetailPage';
 import DeveloperUsersPage from './pages/developer/DeveloperUsersPage';
-import DeveloperLeadsPage from './pages/developer/DeveloperLeadsPage';
 import DeveloperOutreachPage from './pages/developer/DeveloperOutreachPage';
-import DeveloperN8nPage from './pages/developer/DeveloperN8nPage';
+import DeveloperAutomationPage from './pages/developer/DeveloperAutomationPage';
 import DeveloperHealthPage from './pages/developer/DeveloperHealthPage';
 import DeveloperProvidersPage from './pages/developer/DeveloperProvidersPage';
 import DeveloperUsagePage from './pages/developer/DeveloperUsagePage';
@@ -65,7 +58,6 @@ export default function App(): React.ReactElement {
 
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
           </Route>
 
           {/* Developer/Admin console — entirely separate login and layout from the CRM. */}
@@ -79,12 +71,9 @@ export default function App(): React.ReactElement {
           >
             <Route path="/developer" element={<Navigate to="/developer/dashboard" replace />} />
             <Route path="/developer/dashboard" element={<DeveloperOverviewPage />} />
-            <Route path="/developer/businesses" element={<DeveloperBusinessesPage />} />
-            <Route path="/developer/businesses/:id" element={<DeveloperBusinessDetailPage />} />
             <Route path="/developer/users" element={<DeveloperUsersPage />} />
-            <Route path="/developer/leads" element={<DeveloperLeadsPage />} />
             <Route path="/developer/outreach" element={<DeveloperOutreachPage />} />
-            <Route path="/developer/n8n" element={<DeveloperN8nPage />} />
+            <Route path="/developer/automation" element={<DeveloperAutomationPage />} />
             <Route path="/developer/health" element={<DeveloperHealthPage />} />
             <Route path="/developer/providers" element={<DeveloperProvidersPage />} />
             <Route path="/developer/usage" element={<DeveloperUsagePage />} />
@@ -102,45 +91,27 @@ export default function App(): React.ReactElement {
           >
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dashboard/people/:userId" element={<PersonEmailsPage />} />
+            <Route path="/dashboard/people/:userId/emails/:messageId" element={<PersonEmailDetailPage />} />
             <Route path="/inbox" element={<InboxPage />} />
+            <Route path="/sent" element={<SentPage />} />
             <Route path="/leads" element={<LeadsPage />} />
+            <Route path="/leads/queue" element={<NewLeadsQueuePage />} />
             <Route path="/leads/new" element={<NewLeadPage />} />
             <Route path="/leads/:id" element={<LeadDetailPage />} />
             <Route path="/pipeline" element={<PipelinePage />} />
             <Route path="/follow-ups" element={<FollowUpsPage />} />
-            <Route path="/forms" element={<FormsPage />} />
-            <Route
-              path="/forms/new"
-              element={
-                <RoleRoute roles={['owner']}>
-                  <FormEditorPage />
-                </RoleRoute>
-              }
-            />
-            <Route
-              path="/forms/:id"
-              element={
-                <RoleRoute roles={['owner']}>
-                  <FormEditorPage />
-                </RoleRoute>
-              }
-            />
-            <Route path="/campaigns" element={<CampaignsPage />} />
-            <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
             <Route path="/outreach" element={<OutreachOverviewPage />} />
             <Route path="/outreach/contacts" element={<OutreachContactsPage />} />
             <Route path="/outreach/sequences" element={<OutreachSequencesPage />} />
-            <Route path="/outreach/campaigns" element={<OutreachCampaignsPage />} />
-            <Route path="/outreach/campaigns/:id" element={<OutreachCampaignDetailPage />} />
             <Route path="/outreach/drafts" element={<OutreachDraftsPage />} />
-            <Route path="/outreach/replies" element={<OutreachRepliesPage />} />
             <Route path="/outreach/suppressions" element={<OutreachSuppressionsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/settings/business" element={<SettingsBusinessPage />} />
             <Route
               path="/settings/users"
               element={
-                <RoleRoute roles={['owner']}>
+                <RoleRoute roles={['owner', 'manager']}>
                   <SettingsUsersPage />
                 </RoleRoute>
               }
@@ -148,7 +119,7 @@ export default function App(): React.ReactElement {
             <Route
               path="/settings/routing"
               element={
-                <RoleRoute roles={['owner']}>
+                <RoleRoute roles={['owner', 'manager']}>
                   <SettingsRoutingPage />
                 </RoleRoute>
               }
@@ -156,7 +127,7 @@ export default function App(): React.ReactElement {
             <Route
               path="/settings/automations"
               element={
-                <RoleRoute roles={['owner']}>
+                <RoleRoute roles={['owner', 'manager']}>
                   <SettingsAutomationsPage />
                 </RoleRoute>
               }
@@ -164,7 +135,7 @@ export default function App(): React.ReactElement {
             <Route
               path="/settings/integrations"
               element={
-                <RoleRoute roles={['owner']}>
+                <RoleRoute roles={['owner', 'manager']}>
                   <SettingsIntegrationsPage />
                 </RoleRoute>
               }
@@ -172,7 +143,7 @@ export default function App(): React.ReactElement {
             <Route
               path="/settings/api-keys"
               element={
-                <RoleRoute roles={['owner']}>
+                <RoleRoute roles={['owner', 'manager']}>
                   <SettingsApiKeysPage />
                 </RoleRoute>
               }

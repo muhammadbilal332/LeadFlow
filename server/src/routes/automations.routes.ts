@@ -5,7 +5,7 @@ import { requireRole } from '../middleware/requireRole';
 
 const router = Router();
 
-router.use(requireAuth, requireRole('owner'));
+router.use(requireAuth, requireRole('owner', 'manager'));
 
 router.get('/', listAutomationRules);
 router.post('/', createAutomationRule);

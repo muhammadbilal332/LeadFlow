@@ -6,9 +6,10 @@ import { processInboundReply } from '../services/outreach/replyProcessingService
 import { getMockInboundProvider } from '../providers/inbound';
 import { env } from '../config/env';
 import { BadRequestError } from '../utils/appError';
+import { replyScopeFor } from '../utils/replyAccess';
 
 export const listReplies = asyncHandler(async (req: Request, res: Response) => {
-  const replies = await emailReplyRepo.listForBusiness(req.user!.businessId);
+  const replies = await emailReplyRepo.listForBusinessWithContext(req.user!.businessId, { restrictToUserId: replyScopeFor(req.user!) });
   res.json({ replies });
 });
 

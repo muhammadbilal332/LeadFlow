@@ -24,7 +24,7 @@ export const createSalesUser = asyncHandler(async (req: Request, res: Response) 
     name: input.name,
     email: input.email,
     passwordHash,
-    role: input.role === 'owner' ? 'owner' : 'sales',
+    role: input.role,
   });
 
   res.status(201).json({

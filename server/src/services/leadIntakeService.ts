@@ -4,14 +4,12 @@
  * Every way a lead can enter LeadFlow — a public capture form, a Meta
  * lead-ad webhook, a generic n8n/API webhook, manual creation in the CRM,
  * or CSV import — funnels through `intakeLead()`. This is the one place
- * that normalizes input, checks for duplicates, resolves a campaign,
- * scores the lead, assigns it, schedules its first follow-up per the
- * business's SLA targets, and runs automation rules. No intake path
- * re-implements this pipeline.
+ * that normalizes input, checks for duplicates, scores the lead, assigns
+ * it, schedules its first follow-up per the business's SLA targets, and
+ * runs automation rules. No intake path re-implements this pipeline.
  */
 import * as leadRepo from '../repositories/leadRepo';
 import * as activityRepo from '../repositories/activityRepo';
-import * as campaignRepo from '../repositories/campaignRepo';
 import * as followUpRepo from '../repositories/followUpRepo';
 import { calculateLeadScore, priorityFromScore } from './scoringService';
 import { normalizeEmail, normalizePhone } from '../utils/normalize';
@@ -49,7 +47,6 @@ export interface LeadIntakeInput {
   sourceDetail?: string | null;
   industry?: string | null;
   interestedIn?: string | null;
-  budget?: number | null;
   timeline?: string | null;
   description?: string | null;
   /** Explicit assignment (e.g. a sales user creating their own lead, or an owner picking someone). Bypasses routing rules. */
@@ -101,12 +98,29 @@ export async function intakeLead(rawInput: LeadIntakeInput): Promise<LeadIntakeR
   const normalizedEmail = normalizeEmail(input.email);
   const normalizedPhone = normalizePhone(input.phone);
 
-  const potentialDuplicate = await leadRepo.findPotentialDuplicate(input.businessId, normalizedEmail, normalizedPhone);
+  // One lead per email address: a new submission with an email we already
+  // have is merged into that lead (filling any blanks) instead of creating a
+  // second lead that could be contacted again.
+  const emailMatch = await leadRepo.findPotentialDuplicate(input.businessId, normalizedEmail, null);
+  if (emailMatch) {
+    const patch: leadRepo.UpdateLeadInput = {};
+    if (!emailMatch.company && input.company) patch.company = input.company;
+    if (!emailMatch.phone && input.phone) patch.phone = input.phone;
+    if (!emailMatch.industry && input.industry) patch.industry = input.industry;
+    const master = (Object.keys(patch).length > 0 ? await leadRepo.updateLead(emailMatch.id, input.businessId, patch) : null) ?? emailMatch;
+    await activityRepo.createActivity({
+      businessId: input.businessId,
+      leadId: master.id,
+      userId: input.actorUserId ?? null,
+      type: 'Duplicate merged',
+      description: `A new submission with this email (${input.source}) was merged into this lead instead of creating a duplicate.`,
+    });
+    return { lead: master, created: false, isDuplicate: true, duplicateOfLeadId: master.id };
+  }
 
-  const campaign = await campaignRepo.findOrCreateCampaign(input.businessId, input.utmCampaign, input.source);
+  const potentialDuplicate = await leadRepo.findPotentialDuplicate(input.businessId, null, normalizedPhone);
 
   const score = calculateLeadScore({
-    budget: input.budget,
     timeline: input.timeline,
     email: input.email,
     phone: input.phone,
@@ -139,13 +153,11 @@ export async function intakeLead(rawInput: LeadIntakeInput): Promise<LeadIntakeR
     source: input.source,
     industry: input.industry,
     interestedIn: input.interestedIn,
-    budget: input.budget,
     timeline: input.timeline,
     description: input.description,
     score,
     sourceDetail: input.sourceDetail,
     formId: input.formId,
-    campaignId: campaign?.id ?? null,
     campaign: input.campaign,
     adSet: input.adSet,
     ad: input.ad,

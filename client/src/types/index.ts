@@ -1,4 +1,4 @@
-export type Role = 'owner' | 'sales' | 'developer';
+export type Role = 'owner' | 'sales' | 'manager' | 'developer';
 
 export const LEAD_SOURCES = [
   'Website', 'WhatsApp', 'Facebook', 'Instagram', 'Phone', 'Referral', 'Other',
@@ -6,7 +6,7 @@ export const LEAD_SOURCES = [
 ] as const;
 export type LeadSource = (typeof LEAD_SOURCES)[number];
 
-export const LEAD_STATUSES = ['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'] as const;
+export const LEAD_STATUSES = ['New', 'Contacted', 'Replied', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
 export const FOLLOW_UP_TYPES = ['Call', 'Email', 'Meeting', 'WhatsApp', 'Other'] as const;
@@ -51,7 +51,7 @@ export interface Lead {
   source: LeadSource;
   industry: string | null;
   interested_in: string | null;
-  budget: string | null;
+
   timeline: string | null;
   description: string | null;
   status: LeadStatus;
@@ -62,7 +62,6 @@ export interface Lead {
   // Attribution
   source_detail: string | null;
   form_id: string | null;
-  campaign_id: string | null;
   campaign: string | null;
   ad_set: string | null;
   ad: string | null;
@@ -83,6 +82,7 @@ export interface Lead {
   sla_due_at: string | null;
   sla_status: 'Pending' | 'Met' | 'Missed';
   sla_state: SlaState;
+  linkedin_url: string | null;
 }
 
 export interface Activity {
@@ -119,22 +119,6 @@ export interface FollowUp {
   created_at: string;
 }
 
-export interface AiQualification {
-  id: string;
-  lead_id: string;
-  score: number;
-  qualification: 'Hot' | 'Warm' | 'Cold';
-  summary: string;
-  reasoning: string;
-  recommended_action: string;
-  strengths: string | null;
-  concerns: string | null;
-  urgency: string | null;
-  suggested_response: string | null;
-  estimated_priority: LeadPriority | null;
-  created_at: string;
-}
-
 export interface Quotation {
   id: string;
   lead_id: string;
@@ -153,7 +137,50 @@ export interface Pagination {
   totalPages: number;
 }
 
+export interface SalespersonPerformance {
+  userId: string;
+  name: string;
+  role: string;
+  newLeads: number;
+  won: number;
+  lost: number;
+  conversionRate: number;
+  emailsSent: number;
+  repliesReceived: number;
+}
+
+export const PERFORMANCE_PERIODS = [
+  { value: 'day', label: 'Today' },
+  { value: 'week', label: 'This week' },
+  { value: 'month', label: 'This month' },
+] as const;
+export type PerformancePeriod = (typeof PERFORMANCE_PERIODS)[number]['value'];
+
+export interface PersonEmail {
+  id: string;
+  subject: string;
+  body: string;
+  status: string;
+  sent_at: string | null;
+  failed_reason: string | null;
+  thread_id: string | null;
+  recipient_email: string;
+  recipient_name: string | null;
+  lead_id: string | null;
+  reply_count?: number;
+}
+
+export interface EmailReplyItem {
+  id: string;
+  from_email: string;
+  subject: string | null;
+  body: string;
+  classification: string;
+  created_at: string;
+}
+
 export interface DashboardData {
+  salespeople: SalespersonPerformance[];
   kpis: {
     totalLeads: number;
     newLeads: number;
@@ -162,7 +189,6 @@ export interface DashboardData {
     lostDeals: number;
     conversionRate: number;
     followUpsDue: number;
-    pipelineValue: number;
     unworkedLeads: number;
     slaComplianceRate: number;
     overdueLeads: number;
@@ -171,7 +197,6 @@ export interface DashboardData {
     leadsByStatus: Array<{ status: string; count: number }>;
     leadsBySource: Array<{ source: string; count: number }>;
     leadsOverTime: Array<{ date: string; count: number }>;
-    pipelineValueByStatus: Array<{ status: string; value: number }>;
   };
 }
 
@@ -182,8 +207,7 @@ export interface ReportsData {
   lost: number;
   leadsByStatus: Array<{ status: string; count: number }>;
   leadsBySource: Array<{ source: string; count: number }>;
-  pipelineValueByStatus: Array<{ status: string; value: number }>;
-  salespersonPerformance: Array<{ userId: string; name: string; totalLeads: number; won: number; lost: number; pipelineValue: number }>;
+  salespersonPerformance: Array<{ userId: string; name: string; totalLeads: number; won: number; lost: number }>;
   sourcePerformance: Array<{ source: string; totalLeads: number; qualified: number; won: number }>;
   sla: {
     avgResponseSeconds: number | null;
@@ -193,7 +217,6 @@ export interface ReportsData {
     overdueCount: number;
     complianceRate: number;
   };
-  campaignPerformance: Array<{ id: string; name: string; source: string | null; utm_campaign: string | null; total_leads: number; qualified: number; won: number; revenue: number }>;
 }
 
 export interface PipelineColumn {
@@ -229,20 +252,6 @@ export interface LeadForm {
   created_at: string;
   updated_at: string;
   fields: LeadFormField[];
-}
-
-// ===========================================================
-// Campaigns
-// ===========================================================
-export interface Campaign {
-  id: string;
-  name: string;
-  source: string | null;
-  utm_campaign: string | null;
-  total_leads: number;
-  qualified: number;
-  won: number;
-  revenue: number;
 }
 
 // ===========================================================
@@ -403,41 +412,6 @@ export interface OutreachSequence {
   updated_at: string;
 }
 
-export type CampaignStatus = 'draft' | 'review' | 'approved' | 'running' | 'paused' | 'completed' | 'cancelled';
-
-export interface OutreachCampaign {
-  id: string;
-  business_id: string;
-  name: string;
-  description: string | null;
-  status: CampaignStatus;
-  sender_name: string | null;
-  sender_email: string | null;
-  reply_to: string | null;
-  sequence_id: string | null;
-  approved_by: string | null;
-  approved_at: string | null;
-  contactCounts: Record<string, number>;
-  created_at: string;
-  updated_at: string;
-}
-
-export type CampaignContactStatus = 'pending' | 'drafted' | 'approved' | 'queued' | 'sent' | 'delivered' | 'bounced' | 'replied' | 'unsubscribed' | 'stopped' | 'failed';
-
-export interface CampaignContact {
-  id: string;
-  business_id: string;
-  campaign_id: string;
-  contact_id: string;
-  status: CampaignContactStatus;
-  current_step: number;
-  next_send_at: string | null;
-  stopped_reason: string | null;
-  failed_reason: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface QualityIssue {
   code: string;
   severity: 'warning' | 'blocking';
@@ -462,6 +436,10 @@ export interface OutreachDraft {
   approved_at: string | null;
   created_at: string;
   updated_at: string;
+  recipient_name?: string | null;
+  recipient_email?: string;
+  company_name?: string | null;
+  lead_id?: string | null;
 }
 
 export interface OutreachMessage {
@@ -489,6 +467,7 @@ export interface EmailReply {
   subject: string | null;
   body: string;
   classification: string;
+  is_read: boolean;
   created_at: string;
 }
 
@@ -552,25 +531,6 @@ export interface TimeSeriesPoint {
   count: number;
 }
 
-export interface BusinessSummary {
-  id: string;
-  name: string;
-  slug: string;
-  is_active: boolean;
-  owner_name: string | null;
-  owner_email: string | null;
-  user_count: number;
-  lead_count: number;
-  campaign_count: number;
-  created_at: string;
-}
-
-export interface BusinessDetail extends BusinessSummary {
-  email: string | null;
-  phone: string | null;
-  industry: string | null;
-}
-
 export interface PlatformUser {
   id: string;
   name: string;
@@ -580,19 +540,6 @@ export interface PlatformUser {
   created_at: string;
   business_id: string;
   business_name: string;
-}
-
-export interface PlatformLead {
-  id: string;
-  name: string;
-  company: string | null;
-  business_id: string;
-  business_name: string;
-  source: string;
-  status: string;
-  score: number;
-  assigned_user_name: string | null;
-  created_at: string;
 }
 
 export interface OutreachLifecycleStats {
@@ -614,7 +561,7 @@ export interface RecentCampaignSummary {
   created_at: string;
 }
 
-export interface N8nExecutionLog {
+export interface AutomationExecutionLog {
   id: string;
   business_id: string | null;
   triggered_by: 'api_key' | 'jwt';
@@ -628,7 +575,7 @@ export interface N8nExecutionLog {
   created_at: string;
 }
 
-export interface N8nSummary {
+export interface AutomationSummary {
   lastExecutionAt: string | null;
   lastSuccessAt: string | null;
   lastFailureAt: string | null;
@@ -641,7 +588,7 @@ export type HealthStatus = 'healthy' | 'degraded' | 'unavailable' | 'not_configu
 export interface HealthServices {
   leadflowApi: { status: HealthStatus };
   database: { status: HealthStatus };
-  n8n: { status: HealthStatus; detail: string };
+  scheduler: { status: HealthStatus; detail: string };
   emailProvider: { status: HealthStatus; detail: string };
   aiProvider: { status: HealthStatus; detail: string };
   sheetsProvider: { status: HealthStatus; detail: string };
@@ -658,6 +605,79 @@ export interface SystemEvent {
   message: string;
   metadata: Record<string, unknown>;
   created_at: string;
+}
+
+// ===========================================================
+// CRM upgrade: email threading, follow-up queue, Sent/Inbox
+// ===========================================================
+export interface ConversationMessage {
+  direction: 'outgoing' | 'incoming';
+  id: string;
+  subject: string | null;
+  body: string;
+  status?: string;
+  classification?: string;
+  at: string;
+}
+
+export interface EmailThreadWithConversation {
+  id: string;
+  subject: string | null;
+  createdAt: string;
+  lastActivityAt: string;
+  conversation: ConversationMessage[];
+}
+
+export interface LeadEmailHistory {
+  contact: OutreachContact | null;
+  threads: EmailThreadWithConversation[];
+  followUpStatus: FollowUpStatus;
+}
+
+export interface FollowUpStatus {
+  label: string;
+  state: 'none' | 'not_sent' | 'pending' | 'overdue' | 'sent' | 'stopped' | 'completed';
+  dueAt: string | null;
+}
+
+export interface ComposeEmailResult {
+  draft: OutreachDraft;
+  campaignContactId: string;
+  stepOrder: number;
+}
+
+export type FollowUpQueueBucket = '3-day' | '7-day' | '14-day' | '28-day' | 'overdue';
+
+export interface FollowUpQueueItem {
+  campaign_contact_id: string;
+  campaign_id: string;
+  contact_id: string;
+  lead_id: string;
+  lead_name: string;
+  company: string | null;
+  lead_status: string;
+  assigned_user_id: string | null;
+  assigned_user_name: string | null;
+  current_step: number;
+  next_step_order: number;
+  next_send_at: string;
+  cc_status: string;
+  has_draft: boolean;
+  days_past_due: number;
+  bucket: FollowUpQueueBucket;
+}
+
+export interface InboxReply extends EmailReply {
+  contact_name: string | null;
+  lead_id: string | null;
+  lead_name: string | null;
+}
+
+export interface SentMessage extends OutreachMessage {
+  recipient_email: string;
+  recipient_name: string | null;
+  lead_id: string | null;
+  campaign_name: string;
 }
 
 export interface DeveloperAuditLog {

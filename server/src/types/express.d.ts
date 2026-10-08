@@ -6,7 +6,7 @@ declare global {
       user?: JwtPayload;
       /** Raw request body bytes, captured for webhook signature verification (see app.ts). */
       rawBody?: Buffer;
-      /** Set by requireAuthOrApiKey — distinguishes a real external caller (n8n, via API key) from the LeadFlow UI itself (JWT), used for honest n8n-connection reporting. */
+      /** Set by requireAuthOrApiKey — distinguishes a real external caller (a scheduler, via API key) from the LeadFlow UI itself (JWT), used for honest automation-connection reporting. */
       authMethod?: 'jwt' | 'api_key';
     }
   }

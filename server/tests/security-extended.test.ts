@@ -70,7 +70,7 @@ describe('Cross-tenant security on new resources', () => {
   });
 
   it('rejects unauthenticated access to every new protected resource', async () => {
-    const endpoints = ['/api/forms', '/api/campaigns', '/api/notifications', '/api/routing/rules', '/api/automations', '/api/api-keys', '/api/integrations'];
+    const endpoints = ['/api/forms', '/api/notifications', '/api/routing/rules', '/api/automations', '/api/api-keys', '/api/integrations'];
     for (const endpoint of endpoints) {
       const res = await request(app).get(endpoint);
       expect(res.status).toBe(401);

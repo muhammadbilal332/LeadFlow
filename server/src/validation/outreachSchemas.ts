@@ -34,21 +34,6 @@ export const updateSequenceSchema = z.object({
   steps: z.array(sequenceStepSchema).min(1).max(10).optional(),
 });
 
-export const createCampaignSchema = z.object({
-  name: z.string().trim().min(1).max(200),
-  description: z.string().trim().max(1000).optional().nullable(),
-  senderName: z.string().trim().max(200).optional().nullable(),
-  senderEmail: z.union([z.string().trim().toLowerCase().email(), z.literal('')]).optional().nullable(),
-  replyTo: z.union([z.string().trim().toLowerCase().email(), z.literal('')]).optional().nullable(),
-  sequenceId: z.string().uuid().optional().nullable(),
-});
-
-export const updateCampaignSchema = createCampaignSchema.partial();
-
-export const addContactsToCampaignSchema = z.object({
-  contactIds: z.array(z.string().uuid()).min(1).max(500),
-});
-
 export const updateDraftSchema = z.object({
   subject: z.string().trim().min(1).max(300).optional(),
   finalBody: z.string().trim().min(1).max(5000).optional(),

@@ -59,13 +59,3 @@ export async function updateBusiness(
   return result.rows[0] ?? null;
 }
 
-/** Developer-only: blocks every user of this business from logging in (reversible), or permanently removes the business and everything under it (cascades to users, leads, outreach data — irreversible). */
-export async function setBusinessActive(id: string, isActive: boolean): Promise<Business | null> {
-  const result = await query<Business>(`UPDATE businesses SET is_active = $1, updated_at = now() WHERE id = $2 RETURNING *`, [isActive, id]);
-  return result.rows[0] ?? null;
-}
-
-export async function deleteBusiness(id: string): Promise<boolean> {
-  const result = await query(`DELETE FROM businesses WHERE id = $1`, [id]);
-  return (result.rowCount ?? 0) > 0;
-}

@@ -49,3 +49,12 @@ export function createApp(): Express {
 
   return app;
 }
+
+// Default export alongside the named one: server.ts, every test file, and
+// api/index.ts all call createApp() directly for a fresh instance, but some
+// hosting platforms' zero-config framework detection (observed: Vercel's
+// auto-detected "Express" preset) picks this file itself as the function
+// entry point and requires a default export that's callable as (req, res).
+// An Express app satisfies that directly, so this is purely additive — no
+// existing importer is affected since they all use the named export.
+export default createApp();

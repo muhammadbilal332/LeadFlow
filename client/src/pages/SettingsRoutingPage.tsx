@@ -9,6 +9,7 @@ import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../hooks/useToast';
+import PageHeader from '../components/PageHeader';
 
 const FIELD_LABELS: Record<string, string> = { source: 'Source', industry: 'Industry', score: 'Score', always: 'Always (default)' };
 
@@ -24,7 +25,7 @@ export default function SettingsRoutingPage(): React.ReactElement {
   const [savingSla, setSavingSla] = useState(false);
 
   const [form, setForm] = useState({
-    name: '', priority: 0, field: 'source' as RoutingRule['field'], operator: 'equals' as RoutingRule['operator'],
+    name: '', priority: 0, field: 'industry' as RoutingRule['field'], operator: 'equals' as RoutingRule['operator'],
     value: '', assignmentType: 'user' as RoutingRule['assignment_type'], assignUserId: '',
   });
 
@@ -61,7 +62,7 @@ export default function SettingsRoutingPage(): React.ReactElement {
       });
       showToast('Routing rule created.');
       setShowForm(false);
-      setForm({ name: '', priority: 0, field: 'source', operator: 'equals', value: '', assignmentType: 'user', assignUserId: '' });
+      setForm({ name: '', priority: 0, field: 'industry', operator: 'equals', value: '', assignmentType: 'user', assignUserId: '' });
       load();
     } catch {
       showToast('Unable to create routing rule.', 'error');
@@ -112,10 +113,7 @@ export default function SettingsRoutingPage(): React.ReactElement {
   return (
     <div className="space-y-4">
       <SettingsTabs />
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Lead routing</h1>
-        <p className="text-sm text-slate-500">Automatically assign new leads and set response-time targets.</p>
-      </div>
+      <PageHeader eyebrow="Settings" title="Lead routing" description="Automatically assign new leads and set response-time targets." />
 
       {sla && (
         <div className="card p-5">
@@ -156,7 +154,6 @@ export default function SettingsRoutingPage(): React.ReactElement {
             <input required className="input" placeholder="Rule name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
             <input type="number" className="input" placeholder="Priority (0 = first)" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: Number(e.target.value) }))} />
             <select className="select" value={form.field} onChange={(e) => setForm((f) => ({ ...f, field: e.target.value as RoutingRule['field'] }))}>
-              <option value="source">If Source</option>
               <option value="industry">If Industry</option>
               <option value="score">If Score</option>
               <option value="always">Always (default)</option>

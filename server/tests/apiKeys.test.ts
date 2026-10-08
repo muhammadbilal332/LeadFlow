@@ -46,4 +46,20 @@ describe('API keys', () => {
     const res = await request(app).post('/api/api-keys').set('Authorization', `Bearer ${sales.token}`).send({ name: 'Should fail' });
     expect(res.status).toBe(403);
   });
+
+  it('cleanly rejects /api/outreach/tick with no Authorization header at all, instead of crashing the process', async () => {
+    // requireAuthOrApiKey is async and throws synchronously before any
+    // await; without an asyncHandler wrapper that becomes an unhandled
+    // promise rejection instead of a 401 — this is the exact request shape
+    // (header completely absent, not just invalid) that every other tick
+    // test in this suite always supplies something for, so it was never
+    // actually exercised until the Vercel deployment adapter surfaced it.
+    const res = await request(app).post('/api/outreach/tick');
+    expect(res.status).toBe(401);
+  });
+
+  it('cleanly rejects /api/outreach/tick with a malformed API key', async () => {
+    const res = await request(app).post('/api/outreach/tick').set('Authorization', 'Bearer lf_not_a_real_key');
+    expect(res.status).toBe(401);
+  });
 });

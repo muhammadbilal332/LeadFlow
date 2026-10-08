@@ -53,6 +53,11 @@ export async function findById(id: string, businessId: string): Promise<Outreach
   return result.rows[0] ?? null;
 }
 
+export async function findByLeadId(leadId: string, businessId: string): Promise<OutreachContactRow | null> {
+  const result = await query<OutreachContactRow>(`SELECT * FROM outreach_contacts WHERE lead_id = $1 AND business_id = $2`, [leadId, businessId]);
+  return result.rows[0] ?? null;
+}
+
 /** Creates the contact, or updates the enrichable fields on an existing one — never creates a duplicate for the same email within a business. */
 export async function upsertContact(input: UpsertContactInput): Promise<{ contact: OutreachContactRow; created: boolean }> {
   const existing = await findByNormalizedEmail(input.businessId, input.normalizedEmail);

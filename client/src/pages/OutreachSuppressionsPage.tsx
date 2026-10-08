@@ -7,6 +7,7 @@ import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
 import OutreachTabs from '../components/OutreachTabs';
 import { useToast } from '../hooks/useToast';
+import PageHeader from '../components/PageHeader';
 
 export default function OutreachSuppressionsPage(): React.ReactElement {
   const { showToast } = useToast();
@@ -65,10 +66,7 @@ export default function OutreachSuppressionsPage(): React.ReactElement {
   return (
     <div className="space-y-4">
       <OutreachTabs />
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Suppression list</h1>
-        <p className="text-sm text-slate-500">Every send checks this list first. A suppressed address can never receive another outreach email from this business.</p>
-      </div>
+      <PageHeader eyebrow="Outreach" title="Suppression list" description="Every send checks this list first. A suppressed address can never receive another outreach email from this business." />
 
       <form onSubmit={handleAdd} className="card flex flex-wrap gap-2 p-4">
         <input className="input flex-1" placeholder="email@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />

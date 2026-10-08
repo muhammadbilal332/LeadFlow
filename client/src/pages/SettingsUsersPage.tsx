@@ -6,10 +6,15 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
 import { useToast } from '../hooks/useToast';
 import { ApiError } from '../lib/api';
+import { useAuth } from '../hooks/useAuth';
 import SettingsTabs from '../components/SettingsTabs';
+import PageHeader from '../components/PageHeader';
 
 export default function SettingsUsersPage(): React.ReactElement {
   const { showToast } = useToast();
+  const { user } = useAuth();
+  // Managers can see the team but only owners add or deactivate members.
+  const canManageMembers = user?.role === 'owner';
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,15 +70,18 @@ export default function SettingsUsersPage(): React.ReactElement {
   return (
     <div className="space-y-4">
       <SettingsTabs />
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Team members</h1>
-          <p className="text-sm text-slate-500">Manage sales users who can access LeadFlow.</p>
-        </div>
-        <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>
-          <Plus className="h-4 w-4" /> Add Sales User
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Settings"
+        title="Team members"
+        description="Manage sales users who can access sellerClutch."
+        actions={
+          canManageMembers && (
+            <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>
+              <Plus className="h-4 w-4" /> Add Sales User
+            </button>
+          )
+        }
+      />
 
       {showForm && (
         <div className="card p-4">
@@ -127,7 +135,7 @@ export default function SettingsUsersPage(): React.ReactElement {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {u.role !== 'owner' && (
+                    {canManageMembers && u.role !== 'owner' && (
                       <button className="btn-secondary" onClick={() => toggleActive(u)}>
                         {u.is_active ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
                         {u.is_active ? 'Deactivate' : 'Activate'}

@@ -2,8 +2,7 @@
  * Deterministic lead scoring.
  *
  * The score is a sum of independently-weighted signals, capped at 100:
- *   - Budget provided:            +20  (higher budget within reason: up to +10 bonus)
- *   - Timeline provided:          +15  ("immediate"/"asap"/"this month" style urgency: +10 bonus)
+ *   - Timeline provided:          +20  ("immediate"/"asap"/"this month" style urgency: +10 bonus)
  *   - Contact completeness:       +20  (+10 email present, +10 phone present)
  *   - Source quality:             +15  (Referral/Website score higher than cold sources)
  *   - Interest specified:         +15  (interested_in filled in)
@@ -13,7 +12,6 @@
  */
 
 export interface ScorableLead {
-  budget?: number | string | null;
   timeline?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -27,12 +25,6 @@ const HIGH_QUALITY_SOURCES = ['Referral', 'Website'];
 
 export function calculateLeadScore(lead: ScorableLead): number {
   let score = 0;
-
-  const budget = lead.budget != null ? Number(lead.budget) : 0;
-  if (budget > 0) {
-    score += 15;
-    if (budget >= 5000) score += 5;
-  }
 
   if (lead.timeline && lead.timeline.trim().length > 0) {
     score += 10;

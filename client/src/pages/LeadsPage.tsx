@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, Search, Upload, Download, Users2, AlertTriangle, Trash2 } from 'lucide-react';
 import { listLeads, downloadLeadsCsv, listDuplicates, deleteLead } from '../services/leadsApi';
 import { listUsers } from '../services/usersApi';
-import { Lead, LEAD_SOURCES, LEAD_STATUSES, User } from '../types';
+import { Lead, LEAD_STATUSES, User } from '../types';
 import StatusBadge from '../components/StatusBadge';
 import ScoreBadge from '../components/ScoreBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -15,6 +15,12 @@ import DuplicatesModal from '../components/DuplicatesModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
+import PageHeader from '../components/PageHeader';
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase();
+}
 
 export default function LeadsPage(): React.ReactElement {
   const { user } = useAuth();
@@ -32,7 +38,7 @@ export default function LeadsPage(): React.ReactElement {
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState(() => searchParams.get('status') ?? '');
-  const [source, setSource] = useState('');
+  const [slaStatus] = useState(() => searchParams.get('slaStatus') ?? '');
   const [assignedUserId, setAssignedUserId] = useState('');
   const [minScore, setMinScore] = useState('');
   const [page, setPage] = useState(1);
@@ -48,7 +54,7 @@ export default function LeadsPage(): React.ReactElement {
         pageSize: 20,
         search: search || undefined,
         status: status || undefined,
-        source: source || undefined,
+        slaStatus: slaStatus || undefined,
         assignedUserId: assignedUserId || undefined,
         minScore: minScore ? Number(minScore) : undefined,
       });
@@ -60,18 +66,20 @@ export default function LeadsPage(): React.ReactElement {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status, source, assignedUserId, minScore]);
+  }, [page, search, status, slaStatus, assignedUserId, minScore]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  const canManageTeam = user?.role === 'owner' || user?.role === 'manager';
+
   useEffect(() => {
-    if (user?.role === 'owner') {
+    if (canManageTeam) {
       listUsers().then((res) => setUsers(res.users)).catch(() => undefined);
       listDuplicates().then((res) => setDuplicateCount(res.duplicates.length)).catch(() => undefined);
     }
-  }, [user]);
+  }, [canManageTeam]);
 
   function resetPageAnd(setter: (v: string) => void) {
     return (v: string) => {
@@ -104,36 +112,41 @@ export default function LeadsPage(): React.ReactElement {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Leads</h1>
-          <p className="text-sm text-slate-500">{total} total leads</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="btn-secondary" onClick={() => setShowImport(true)}>
-            <Upload className="h-4 w-4" /> Import
-          </button>
-          <button className="btn-secondary" onClick={handleExport}>
-            <Download className="h-4 w-4" /> Export
-          </button>
-          <Link to="/leads/new" className="btn-primary">
-            <Plus className="h-4 w-4" /> Add Lead
-          </Link>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="CRM"
+        title="Leads"
+        description={`${total} total lead${total === 1 ? '' : 's'} across your pipeline.`}
+        actions={
+          <>
+            {(user?.role === 'owner' || user?.role === 'manager') && (
+              <button className="btn-secondary" onClick={() => setShowImport(true)}>
+                <Upload className="h-4 w-4" /> Import
+              </button>
+            )}
+            {user?.role === 'owner' && (
+              <button className="btn-secondary" onClick={handleExport}>
+                <Download className="h-4 w-4" /> Export
+              </button>
+            )}
+            <Link to="/leads/new" className="btn-primary">
+              <Plus className="h-4 w-4" /> Add Lead
+            </Link>
+          </>
+        }
+      />
 
       {duplicateCount > 0 && (
         <button
           onClick={() => setShowDuplicates(true)}
-          className="flex w-full items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-left text-sm text-amber-800 hover:bg-amber-100"
+          className="flex w-full items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-800 hover:bg-amber-100"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {duplicateCount} possible duplicate lead{duplicateCount === 1 ? '' : 's'} awaiting review — click to review and merge.
         </button>
       )}
 
-      <div className="card p-4">
+      <div className="card p-5">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="relative lg:col-span-2">
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -151,13 +164,7 @@ export default function LeadsPage(): React.ReactElement {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          <select className="select" value={source} onChange={(e) => resetPageAnd(setSource)(e.target.value)} aria-label="Filter by source">
-            <option value="">All sources</option>
-            {LEAD_SOURCES.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          {user?.role === 'owner' && (
+          {canManageTeam && (
             <select className="select" value={assignedUserId} onChange={(e) => resetPageAnd(setAssignedUserId)(e.target.value)} aria-label="Filter by salesperson">
               <option value="">All salespeople</option>
               {users.map((u) => (
@@ -189,41 +196,42 @@ export default function LeadsPage(): React.ReactElement {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+              <thead className="bg-slate-50/70 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 <tr>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Company</th>
-                  <th className="px-4 py-3">Contact</th>
-                  <th className="px-4 py-3">Source</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Score</th>
-                  <th className="px-4 py-3">Assigned</th>
-                  <th className="px-4 py-3">Created</th>
-                  {user?.role === 'owner' && <th className="px-4 py-3" />}
+                  <th className="px-5 py-3.5">Name</th>
+                  <th className="px-5 py-3.5">Company</th>
+                  <th className="px-5 py-3.5">Contact</th>
+                  <th className="px-5 py-3.5">Status</th>
+                  <th className="px-5 py-3.5">Score</th>
+                  <th className="px-5 py-3.5">Assigned</th>
+                  <th className="px-5 py-3.5">Created</th>
+                  {(user?.role === 'owner' || user?.role === 'manager') && <th className="px-5 py-3.5" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {leads.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <Link to={`/leads/${lead.id}`} className="font-medium text-brand-700 hover:underline">
-                        {lead.name}
+                  <tr key={lead.id} className="transition-colors hover:bg-slate-50">
+                    <td className="px-5 py-4">
+                      <Link to={`/leads/${lead.id}`} className="flex items-center gap-3">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy-900 text-[11px] font-semibold text-white">
+                          {initials(lead.name)}
+                        </span>
+                        <span className="font-semibold text-slate-900 hover:text-brand-600">{lead.name}</span>
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{lead.company || '—'}</td>
-                    <td className="px-4 py-3 text-slate-600">
+                    <td className="px-5 py-4 text-slate-600">{lead.company || '—'}</td>
+                    <td className="px-5 py-4 text-slate-600">
                       <div>{lead.email || '—'}</div>
                       <div className="text-xs text-slate-400">{lead.phone || ''}</div>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{lead.source}</td>
-                    <td className="px-4 py-3"><StatusBadge status={lead.status} /></td>
-                    <td className="px-4 py-3"><ScoreBadge score={lead.score} /></td>
-                    <td className="px-4 py-3 text-slate-600">{lead.assigned_user_name || 'Unassigned'}</td>
-                    <td className="px-4 py-3 text-slate-500">{new Date(lead.created_at).toLocaleDateString()}</td>
-                    {user?.role === 'owner' && (
-                      <td className="px-4 py-3 text-right">
+                    <td className="px-5 py-4"><StatusBadge status={lead.status} /></td>
+                    <td className="px-5 py-4"><ScoreBadge score={lead.score} /></td>
+                    <td className="px-5 py-4 text-slate-600">{lead.assigned_user_name || 'Unassigned'}</td>
+                    <td className="px-5 py-4 text-slate-500">{new Date(lead.created_at).toLocaleDateString()}</td>
+                    {(user?.role === 'owner' || user?.role === 'manager') && (
+                      <td className="px-5 py-4 text-right">
                         <button
-                          className="text-slate-400 hover:text-red-500"
+                          className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500"
                           aria-label={`Remove ${lead.name}`}
                           onClick={() => setDeleteTarget(lead)}
                         >

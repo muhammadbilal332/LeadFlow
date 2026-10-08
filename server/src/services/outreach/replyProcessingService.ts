@@ -21,6 +21,7 @@ import { normalizeEmail } from '../../utils/normalize';
 import { classifyReply } from './replyClassifier';
 import * as suppressionService from './suppressionService';
 import { ReplyClassification } from '../../repositories/emailReplyRepo';
+import { markLeadReplied } from '../leadStatusSyncService';
 
 const LEAD_CREATING_CLASSIFICATIONS: ReplyClassification[] = ['interested', 'meeting_request', 'question', 'referral'];
 
@@ -73,6 +74,9 @@ export async function processInboundReply(businessId: string, event: InboundEmai
   }
 
   if (!LEAD_CREATING_CLASSIFICATIONS.includes(classification)) {
+    if (contact.lead_id) {
+      await markLeadReplied(businessId, contact.lead_id);
+    }
     await notifyOwner(businessId, {
       type: 'outreach_reply',
       title: `Reply received (${classification.replace('_', ' ')})`,
@@ -93,6 +97,7 @@ export async function processInboundReply(businessId: string, event: InboundEmai
       description: `${contact.contact_name || contact.email} replied (${classification.replace('_', ' ')}): "${event.body.slice(0, 200)}"`,
     });
     await outreachContactRepo.linkToLead(contact.id, businessId, existingLead.id);
+    await markLeadReplied(businessId, existingLead.id);
 
     if (existingLead.assigned_user_id) {
       await notifyUser(businessId, existingLead.assigned_user_id, {
@@ -126,6 +131,7 @@ export async function processInboundReply(businessId: string, event: InboundEmai
   });
 
   await outreachContactRepo.linkToLead(contact.id, businessId, result.lead.id);
+  await markLeadReplied(businessId, result.lead.id);
 
   return { skipped: false, classification, leadId: result.lead.id, leadCreated: result.created };
 }

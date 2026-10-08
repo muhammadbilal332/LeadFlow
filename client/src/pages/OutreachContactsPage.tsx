@@ -9,6 +9,7 @@ import EmptyState from '../components/EmptyState';
 import ConfirmDialog from '../components/ConfirmDialog';
 import OutreachTabs from '../components/OutreachTabs';
 import { useToast } from '../hooks/useToast';
+import PageHeader from '../components/PageHeader';
 
 const emptyForm = { email: '', contactName: '', companyName: '', industry: '', painPoints: '', possibleSolution: '' };
 
@@ -97,20 +98,21 @@ export default function OutreachContactsPage(): React.ReactElement {
   return (
     <div className="space-y-4">
       <OutreachTabs />
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Outreach contacts</h1>
-          <p className="text-sm text-slate-500">Prospects you'll send personalized cold emails to.</p>
-        </div>
-        <div className="flex gap-2">
+      <PageHeader
+        eyebrow="Outreach"
+        title="Outreach contacts"
+        description="Prospects you'll send personalized cold emails to."
+        actions={
+          <>
           <button className="btn-secondary" onClick={handleImport} disabled={importing}>
             <Sheet className="h-4 w-4" /> {importing ? 'Importing...' : 'Import from sheet'}
           </button>
           <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>
             <Plus className="h-4 w-4" /> Add contact
           </button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {showForm && (
         <form onSubmit={handleCreate} className="card grid gap-3 p-4 sm:grid-cols-2">

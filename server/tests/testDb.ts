@@ -91,7 +91,11 @@ export async function setupTestDatabase(): Promise<void> {
       );
       sql = sql.replace(
         "role TEXT NOT NULL CHECK (role IN ('owner', 'sales'))",
-        "role TEXT NOT NULL CHECK (role IN ('owner', 'sales', 'developer'))"
+        "role TEXT NOT NULL CHECK (role IN ('owner', 'sales', 'developer', 'manager'))"
+      );
+      sql = sql.replace(
+        "status TEXT NOT NULL DEFAULT 'New'\n    CHECK (status IN ('New','Contacted','Qualified','Proposal','Negotiation','Won','Lost'))",
+        "status TEXT NOT NULL DEFAULT 'New'\n    CHECK (status IN ('New','Contacted','Replied','Qualified','Proposal','Negotiation','Won','Lost'))"
       );
     }
     if (file === '004_lead_attribution.sql') {
@@ -108,6 +112,13 @@ export async function setupTestDatabase(): Promise<void> {
       // into 001's patch above), so stripping it leaves an empty string —
       // pg-mem's parser errors on that, so skip the file entirely in tests.
       continue;
+    }
+    if (file === '015_crm_upgrade.sql') {
+      // The role/status widenings are already baked into 001's patch above
+      // (same pg-mem DROP/ADD CONSTRAINT limitation as 004/011/014); only
+      // the real ADD COLUMN statement needs to actually run here.
+      sql = sql.replace(/ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;[\s\S]*?'manager'\s*\)\s*\);/, '');
+      sql = sql.replace(/ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_status_check;[\s\S]*?'Won','Lost'\s*\)\s*\);/, '');
     }
 
     db.public.none(sql);

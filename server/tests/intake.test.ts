@@ -11,7 +11,7 @@ describe('Central lead intake: duplicate detection & merge', () => {
 
   const app = createApp();
 
-  it('flags a second lead with the same email as a possible duplicate without dropping it', async () => {
+  it('merges a second lead with the same email into the existing one instead of creating a duplicate', async () => {
     const owner = await signupOwner(app);
 
     const first = await request(app)
@@ -28,9 +28,14 @@ describe('Central lead intake: duplicate detection & merge', () => {
     expect(second.status).toBe(201);
     expect(second.body.isDuplicate).toBe(true);
     expect(second.body.duplicateOfLeadId).toBe(first.body.lead.id);
+    expect(second.body.lead.id).toBe(first.body.lead.id);
 
+    const list = await request(app).get('/api/leads?page=1&pageSize=100').set('Authorization', `Bearer ${owner.token}`);
+    expect(list.body.pagination.total).toBe(1);
+
+    // Email matches are merged outright, so nothing is left waiting for review.
     const dupList = await request(app).get('/api/leads/duplicates').set('Authorization', `Bearer ${owner.token}`);
-    expect(dupList.body.duplicates.some((d: { id: string }) => d.id === second.body.lead.id)).toBe(true);
+    expect(dupList.body.duplicates).toHaveLength(0);
   });
 
   it('matches duplicates by normalized phone number too, regardless of formatting', async () => {
@@ -86,7 +91,6 @@ describe('Central lead intake: scoring, priority, and SLA', () => {
         email: 'hot@example.com',
         phone: '555-999-1111',
         source: 'Referral',
-        budget: 20000,
         timeline: 'ASAP',
         interestedIn: 'Everything',
         description: 'A very detailed, thorough description of exactly what this prospect needs from us.',
@@ -203,10 +207,9 @@ describe('Central lead intake: automation rules', () => {
         email: 'auto@example.com',
         phone: '555-222-3333',
         source: 'Referral',
-        budget: 20000,
         timeline: 'ASAP',
         interestedIn: 'Everything',
-        description: 'A very detailed and complete description of the need, budget, and urgency here.',
+        description: 'A very detailed and complete description of the need and urgency here.',
       });
 
     expect(res.body.lead.score).toBeGreaterThanOrEqual(85);

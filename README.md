@@ -2,7 +2,9 @@
 
 **Turn leads into customers.**
 
-LeadFlow is a multi-tenant lead capture, qualification, and CRM platform for small businesses and sales teams. It covers the full pipeline — from a public capture form or ad webhook, through duplicate detection, deterministic scoring, automatic assignment, and follow-up scheduling, to a Kanban pipeline, response-SLA tracking, and marketing attribution reporting — with an AI-assisted qualification layer that's fully optional.
+LeadFlow is a standalone lead capture, qualification, and CRM platform for a single business and its sales team. It covers the full pipeline — from a public capture form or ad webhook, through duplicate detection, deterministic scoring, automatic assignment, and follow-up scheduling, to a Kanban pipeline, response-SLA tracking, and marketing attribution reporting — with an AI-assisted qualification layer that's fully optional.
+
+The schema still scopes every row by `business_id` (the application was originally built multi-tenant, and that data model was kept rather than rewritten), but the product now runs as one deployment for one business: there's no public signup, no business switching, and no cross-business administration.
 
 ## Product overview
 
@@ -36,7 +38,7 @@ New → Contacted → Qualified → Proposal → Negotiation → Won/Lost
 
 ## Features
 
-- **Multi-tenant accounts** — each business's data is fully isolated; the backend derives tenant identity from the authenticated JWT (or, for public/webhook intake, from a URL slug or a per-business secret) — never from client input.
+- **Business-scoped data isolation** — every record is tied to the authenticated business, derived from the JWT (or, for public/webhook intake, from a URL slug or a per-business secret) — never from client input. There's one real business in this deployment, but the scoping is still enforced on every query, not assumed.
 - **Role-based access** — `owner` (full access: users, business settings, all leads, analytics, integrations) and `sales` (their assigned leads only).
 - **Public lead capture forms** — build a form with a small field editor, get a public URL and an iframe embed snippet; submissions create real leads with full UTM/attribution capture, no login required.
 - **Duplicate detection & merge** — new leads are matched against existing ones by normalized email/phone; possible duplicates are flagged (never silently dropped) and can be reviewed and merged, preserving notes, activity, and open follow-ups.
@@ -305,7 +307,7 @@ POST   /api/outreach/dev/simulate-reply                          (mock-provider 
 GET    /api/outreach/providers    GET    /api/outreach/usage
 GET    /api/outreach/suppressions POST   /api/outreach/suppressions   DELETE /api/outreach/suppressions/:email
 GET/POST /api/outreach/imports    GET/PATCH /api/outreach/settings                     (owner to write)
-POST   /api/outreach/tick                          (JWT or business API key — this is what n8n calls on a schedule)
+POST   /api/outreach/tick                          (JWT or business API key — called on a schedule by GitHub Actions, see .github/workflows/outreach-tick.yml)
 GET/POST/DELETE /api/integrations/google-sheets                                       (owner only)
 POST   /api/webhooks/email/:businessId/inbound     POST /api/webhooks/email/:businessId/status
                                                     (real-provider webhooks, signature-verified, no JWT)
@@ -335,10 +337,11 @@ npm test
 ## Production deployment
 
 - **Frontend → Vercel.** Build command `npm run build --workspace=client`, output directory `client/dist`. Set `VITE_API_URL` to your deployed API's `/api` URL.
-- **Backend → Render** (or any Node host). Build command `npm run build --workspace=server`, start command `npm run start --workspace=server` (runs `node dist/server.js`). Set all server env vars from the table above, with `CLIENT_URL` and `PUBLIC_APP_URL` pointing at your Vercel domain.
+- **Backend → Render** (long-running process; see `render.yaml`) **or Vercel** (serverless; see `server/api/index.ts` and `server/vercel.json` — same Express app, wrapped as a function, zero business-logic differences). Either way, set all server env vars from the table above, with `CLIENT_URL` and `PUBLIC_APP_URL` pointing at your frontend domain. For Vercel specifically: import the repo as a new project, set its Root Directory to `server`, and it deploys with no card/payment method required on the free Hobby tier.
 - **Database → Supabase PostgreSQL.** Run `npm run db:migrate` (and optionally `npm run db:seed`) against your production `DATABASE_URL` before first deploy.
+- **Outreach scheduler → GitHub Actions.** `.github/workflows/outreach-tick.yml` calls `POST /api/outreach/tick` every 15 minutes. Set the `LEADFLOW_API_URL` and `LEADFLOW_API_KEY` repository secrets and it runs entirely on GitHub's infrastructure — **no separate always-on process or third-party workflow tool (e.g. n8n) is required** to keep outreach moving.
 
-CORS (`CLIENT_URL`), the API base URL (`VITE_API_URL`), and every shareable link (form URLs, embed snippets, webhook URLs) are environment-driven via `PUBLIC_APP_URL` — no hardcoded localhost assumptions in application code. Public form and webhook routes work identically in production; just make sure your Meta App's webhook subscription and any n8n workflow point at your production `PUBLIC_APP_URL`, not localhost.
+CORS (`CLIENT_URL`), the API base URL (`VITE_API_URL`), and every shareable link (form URLs, embed snippets, webhook URLs) are environment-driven via `PUBLIC_APP_URL` — no hardcoded localhost assumptions in application code. Public form and webhook routes work identically in production; just make sure your Meta App's webhook subscription and any inbound automation tool you've configured (n8n, Zapier, etc. — entirely optional) point at your production `PUBLIC_APP_URL`, not localhost.
 
 ## License
 

@@ -6,7 +6,7 @@ export interface UserRow {
   name: string;
   email: string;
   password_hash: string;
-  role: 'owner' | 'sales' | 'developer';
+  role: 'owner' | 'sales' | 'manager' | 'developer';
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -21,7 +21,7 @@ export async function createUser(input: {
   name: string;
   email: string;
   passwordHash: string;
-  role: 'owner' | 'sales' | 'developer';
+  role: 'owner' | 'sales' | 'manager' | 'developer';
 }): Promise<UserRow> {
   const result = await query<UserRow>(
     `INSERT INTO users (business_id, name, email, password_hash, role) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
@@ -73,7 +73,7 @@ export async function listUsersByBusiness(businessId: string): Promise<SafeUser[
 }
 
 /** Developer-only: changes a user's role directly, bypassing the normal per-business user-management path (which never exposes role changes). */
-export async function updateUserRole(id: string, role: 'owner' | 'sales'): Promise<SafeUser | null> {
+export async function updateUserRole(id: string, role: 'owner' | 'sales' | 'manager'): Promise<SafeUser | null> {
   const result = await query<SafeUser>(`UPDATE users SET role = $1, updated_at = now() WHERE id = $2 RETURNING ${SAFE_COLUMNS}`, [role, id]);
   return result.rows[0] ?? null;
 }

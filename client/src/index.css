@@ -2,13 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens, as plain values (Tailwind's `brand`/`navy` scales hold the
+ * color ramps in tailwind.config.js; these are the handful of exact,
+ * named tones from the design spec that don't sit neatly on a 50-950 ramp).
+ */
+:root {
+  --page-bg: #f7f9fc;
+  --card-bg: #ffffff;
+  --text-primary: #0b1f3a;
+  --text-secondary: #64748b;
+  --border-color: #e2e8f0;
+  --muted-bg: #f1f5f9;
+}
+
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    background-color: var(--page-bg);
+    color: var(--text-primary);
+    @apply antialiased;
     font-feature-settings: 'cv11', 'ss01';
   }
   :focus-visible {
@@ -21,19 +37,19 @@
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98];
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98];
   }
   .btn-primary {
-    @apply btn bg-brand-600 text-white shadow-soft hover:bg-brand-700 hover:shadow-card;
+    @apply btn bg-brand-500 text-white shadow-soft hover:bg-brand-600 hover:shadow-card;
   }
   .btn-secondary {
-    @apply btn border border-slate-300 bg-white text-slate-700 shadow-soft hover:border-slate-400 hover:bg-slate-50;
+    @apply btn border border-slate-300 bg-white text-navy-900 shadow-soft hover:border-slate-400 hover:bg-slate-50;
   }
   .btn-danger {
     @apply btn bg-red-600 text-white shadow-soft hover:bg-red-700;
   }
   .card {
-    @apply rounded-xl border border-slate-200/80 bg-white shadow-soft;
+    @apply rounded-2xl border border-slate-200 bg-white shadow-soft;
   }
   .card-hover {
     @apply card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover;
@@ -48,9 +64,104 @@
     @apply input pr-8;
   }
   .page-heading {
-    @apply text-2xl font-bold tracking-tight text-slate-900;
+    @apply text-2xl font-bold tracking-tight text-navy-900;
   }
   .eyebrow {
     @apply text-xs font-semibold uppercase tracking-wider text-slate-500;
   }
+  /* A deep-navy surface for a hero or other major feature section — white
+     type, a bright-blue eyebrow/accent, used sparingly and deliberately
+     rather than as the app's everyday background. */
+  .hero-navy {
+    @apply rounded-2xl bg-navy-900 text-white shadow-card;
+    background-image: radial-gradient(ellipse at top right, rgba(59, 130, 246, 0.25), transparent 60%);
+  }
+}
+
+/*
+ * Every <h1> that still carries the plain `text-slate-900` utility (most
+ * pages, rather than the shared `.page-heading` class above) picks up the
+ * same navy identity color. `h1.text-slate-900` outranks the bare utility
+ * class on specificity, so this applies without editing every page.
+ */
+h1.text-slate-900 {
+  color: #082f73;
+}
+
+/*
+ * The app's components use Tailwind's slate/white utilities directly, so the
+ * design spec's exact text/surface tokens are applied the same way: a plain
+ * rule, same specificity, later in the cascade, winning over the bare
+ * utility class without editing every page. Secondary text (#64748b) and
+ * borders (#e2e8f0) already equal Tailwind's slate-500/slate-200, so those
+ * need no override here.
+ */
+.text-slate-900,
+.text-slate-800 {
+  color: var(--text-primary);
+}
+
+/*
+ * Dark theme. Not an inverted copy of light mode — its own small ramp of
+ * midnight-navy surfaces (page < section/card < elevated), so cards read as
+ * sitting slightly above the page rather than just "everything but darker".
+ */
+.dark body {
+  background-color: #060d18;
+  color: #f8fafc;
+}
+.dark .bg-white,
+.dark .bg-white\/80,
+.dark .bg-white\/95,
+.dark [class*='bg-white/'] {
+  background-color: #0d1b2e;
+}
+.dark .bg-slate-50 { background-color: #060d18; }
+.dark .bg-slate-100 { background-color: #11243b; }
+.dark [class*='bg-slate-100/'] { background-color: rgb(17 36 59 / 0.6); }
+.dark .bg-slate-200 { background-color: #16304f; }
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-slate-50\/60:hover { background-color: #11243b; }
+.dark .text-slate-900,
+.dark .text-slate-800 { color: #f8fafc; }
+.dark .text-slate-700 { color: #cbd5e1; }
+.dark .text-slate-600,
+.dark .text-slate-500 { color: #94a3b8; }
+.dark .text-slate-400 { color: #64748b; }
+.dark .hover\:text-slate-700:hover,
+.dark .hover\:text-slate-900:hover { color: #f8fafc; }
+.dark .border-slate-200,
+.dark .border-slate-200\/80,
+.dark .border-slate-300,
+.dark .border-slate-100 { border-color: #1e334d; }
+.dark [class*='divide-slate-'] > * { border-color: #1e334d; }
+.dark .card { background-color: #0d1b2e; border-color: #1e334d; }
+.dark .btn-secondary { background-color: transparent; border-color: #2c447a; color: #f8fafc; }
+.dark .btn-secondary:hover { background-color: #11243b; }
+.dark .input,
+.dark .select,
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #0d1b2e;
+  border-color: #1e334d;
+  color: #f8fafc;
+}
+.dark .label { color: #cbd5e1; }
+.dark .page-heading { color: #f8fafc; }
+.dark h1.text-slate-900 { color: #f8fafc; }
+.dark .text-navy-900 { color: #f8fafc; }
+.dark ::placeholder { color: #64748b; }
+.dark .shadow-soft,
+.dark .shadow-card { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.4); }
+/* The spec's "blue glow" — a soft halo in place of a plain focus ring,
+   kept subtle and only in dark mode where it reads as intentional rather
+   than decorative. */
+.dark :focus-visible {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+.dark .hero-navy {
+  background-color: #06265f;
+  background-image: radial-gradient(ellipse at top right, rgba(96, 165, 250, 0.2), transparent 60%);
 }

@@ -6,12 +6,10 @@ const PRIMARY_TABS = [
   { to: '/outreach', label: 'Overview', end: true },
   { to: '/outreach/contacts', label: 'Contacts' },
   { to: '/outreach/drafts', label: 'Drafts' },
-  { to: '/outreach/replies', label: 'Replies' },
 ];
 
 const MORE_TABS = [
-  { to: '/outreach/campaigns', label: 'Campaigns', description: 'Manually control a campaign — most imports no longer need this.' },
-  { to: '/outreach/sequences', label: 'Sequences', description: 'Reusable multi-step email sequences for manual campaigns.' },
+  { to: '/outreach/sequences', label: 'Sequences', description: 'Reusable multi-step email sequences behind auto-pilot imports and follow-ups.' },
   { to: '/outreach/suppressions', label: 'Suppressions', description: 'Addresses that will never be emailed.' },
 ];
 

@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { Express } from 'express';
 import { hashPassword } from '../src/utils/password';
+import { signToken } from '../src/utils/jwt';
 import { createBusiness } from '../src/repositories/businessRepo';
 import { createUser } from '../src/repositories/userRepo';
 
@@ -13,29 +14,32 @@ export interface TestAccount {
 
 let counter = 0;
 
+/**
+ * Creates an isolated owner+business pair directly through the repositories
+ * (mirroring signupDeveloper's existing pattern) rather than through a
+ * public HTTP endpoint — LeadFlow no longer exposes public self-service
+ * business creation (standalone single-business app), but the test suite
+ * still needs its own isolated business per test to exercise cross-business
+ * scoping and permission checks.
+ */
 export async function signupOwner(app: Express, overrides: Partial<{ businessName: string; name: string; email: string; password: string }> = {}): Promise<TestAccount> {
   counter++;
   const email = overrides.email ?? `owner${counter}@test.com`;
-  const res = await request(app)
-    .post('/api/auth/signup')
-    .send({
-      businessName: overrides.businessName ?? `Test Business ${counter}`,
-      name: overrides.name ?? 'Test Owner',
-      email,
-      password: overrides.password ?? 'password123',
-      confirmPassword: overrides.password ?? 'password123',
-    });
+  const password = overrides.password ?? 'password123';
 
-  if (res.status !== 201) {
-    throw new Error(`Signup failed: ${JSON.stringify(res.body)}`);
-  }
-
-  return {
-    token: res.body.token,
-    userId: res.body.user.id,
-    businessId: res.body.user.businessId,
+  const business = await createBusiness({ name: overrides.businessName ?? `Test Business ${counter}` });
+  const passwordHash = await hashPassword(password);
+  const user = await createUser({
+    businessId: business.id,
+    name: overrides.name ?? 'Test Owner',
     email,
-  };
+    passwordHash,
+    role: 'owner',
+  });
+
+  const token = signToken({ userId: user.id, businessId: business.id, role: user.role });
+
+  return { token, userId: user.id, businessId: business.id, email };
 }
 
 /**

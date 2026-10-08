@@ -3,6 +3,7 @@ import { Plus, Copy, Trash2, Key } from 'lucide-react';
 import * as integrationsApi from '../services/integrationsApi';
 import { ApiKey } from '../types';
 import SettingsTabs from '../components/SettingsTabs';
+import PageHeader from '../components/PageHeader';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -73,15 +74,16 @@ export default function SettingsApiKeysPage(): React.ReactElement {
   return (
     <div className="space-y-4">
       <SettingsTabs />
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">API keys</h1>
-          <p className="text-sm text-slate-500">For server-to-server integrations that call the LeadFlow API directly.</p>
-        </div>
-        <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>
-          <Plus className="h-4 w-4" /> New key
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Settings"
+        title="API keys"
+        description="For server-to-server integrations that call the sellerClutch API directly."
+        actions={
+          <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>
+            <Plus className="h-4 w-4" /> New key
+          </button>
+        }
+      />
 
       {showForm && (
         <form onSubmit={handleCreate} className="card flex flex-wrap gap-2 p-4">

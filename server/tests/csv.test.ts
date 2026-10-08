@@ -14,10 +14,10 @@ describe('CSV import/export', () => {
   it('imports valid rows and reports invalid ones without crashing', async () => {
     const owner = await signupOwner(app);
     const csv = [
-      'name,company,email,phone,source,industry,interested_in,budget,timeline,description',
-      'Valid Lead,Acme,valid@acme.test,555-1111,Website,Retail,Website redesign,5000,This month,Needs help',
-      ',Missing Name Co,,,,,,,,',
-      'Another Valid,Beta,valid2@beta.test,555-2222,Referral,Finance,CRM,8000,ASAP,Urgent need',
+      'name,company,email,phone,source,industry,interested_in,timeline,description',
+      'Valid Lead,Acme,valid@acme.test,555-1111,Website,Retail,Website redesign,This month,Needs help',
+      ',Missing Name Co,,,,,,,',
+      'Another Valid,Beta,valid2@beta.test,555-2222,Referral,Finance,CRM,ASAP,Urgent need',
     ].join('\n');
 
     const res = await request(app).post('/api/leads/import').set('Authorization', `Bearer ${owner.token}`).send({ csv });

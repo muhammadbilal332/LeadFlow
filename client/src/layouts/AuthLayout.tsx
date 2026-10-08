@@ -1,6 +1,5 @@
 import React from 'react';
 import { Outlet, Link } from 'react-router-dom';
-import { Zap } from 'lucide-react';
 
 export default function AuthLayout(): React.ReactElement {
   return (
@@ -15,9 +14,8 @@ export default function AuthLayout(): React.ReactElement {
       />
       <div className="w-full max-w-md animate-fade-in">
         <Link to="/" className="mb-8 flex items-center justify-center gap-2.5">
-          <span className="rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 p-2.5 text-white shadow-card">
-            <Zap className="h-5 w-5" aria-hidden="true" fill="currentColor" />
-          </span>
+          <img src="/logo-mark.png" alt="" className="logo-mark-light-variant h-9 w-auto animate-logo-float" aria-hidden="true" />
+          <img src="/logo-mark-dark.png" alt="" className="logo-mark-dark-variant h-9 w-auto animate-logo-float" aria-hidden="true" />
           <span className="text-xl font-bold tracking-tight text-navy-900">sellerClutch</span>
         </Link>
         <div className="card p-6 shadow-card sm:p-8">

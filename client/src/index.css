@@ -151,6 +151,13 @@ h1.text-slate-900 {
 .dark .label { color: #cbd5e1; }
 .dark .page-heading { color: #f8fafc; }
 .dark h1.text-slate-900 { color: #f8fafc; }
+
+/* The logo mark is a flat navy silhouette, which reads fine on light
+ * surfaces but loses contrast against the dark-theme navy sidebar/header.
+ * Swap to a brand-blue recolor (same artwork, different fill) in dark mode. */
+.logo-mark-dark-variant { display: none; }
+.dark .logo-mark-light-variant { display: none; }
+.dark .logo-mark-dark-variant { display: inline-block; }
 .dark .text-navy-900 { color: #f8fafc; }
 .dark ::placeholder { color: #64748b; }
 .dark .shadow-soft,

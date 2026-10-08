@@ -50,9 +50,17 @@ export default {
       },
       keyframes: {
         'fade-in': { '0%': { opacity: 0, transform: 'translateY(4px)' }, '100%': { opacity: 1, transform: 'translateY(0)' } },
+        // A subtle, continuous flight motion for the bird logo mark: a gentle
+        // bob and tilt, slow enough to sit quietly in the sidebar/header
+        // without being distracting.
+        'logo-float': {
+          '0%, 100%': { transform: 'translateY(0) rotate(0deg)' },
+          '50%': { transform: 'translateY(-3px) rotate(-4deg)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.35s ease-out',
+        'logo-float': 'logo-float 3.2s ease-in-out infinite',
       },
     },
   },

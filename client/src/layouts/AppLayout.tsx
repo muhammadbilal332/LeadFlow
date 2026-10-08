@@ -10,7 +10,6 @@ import {
   Menu,
   X,
   LogOut,
-  Zap,
   Inbox as InboxIcon,
   Send,
   ChevronRight,
@@ -91,9 +90,8 @@ export default function AppLayout(): React.ReactElement {
   const sidebarContent = (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2.5 px-6 py-6">
-        <span className="rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 p-2 text-white shadow-soft">
-          <Zap className="h-4 w-4" aria-hidden="true" fill="currentColor" />
-        </span>
+        <img src="/logo-mark.png" alt="" className="logo-mark-light-variant h-7 w-auto animate-logo-float" aria-hidden="true" />
+        <img src="/logo-mark-dark.png" alt="" className="logo-mark-dark-variant h-7 w-auto animate-logo-float" aria-hidden="true" />
         <span className="text-lg font-bold tracking-tight text-navy-900">sellerClutch</span>
       </div>
       <nav className="flex-1 space-y-6 overflow-y-auto px-4 pb-4" aria-label="Main navigation">
@@ -148,9 +146,8 @@ export default function AppLayout(): React.ReactElement {
 
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
         <div className="flex items-center gap-2">
-          <span className="rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 p-1.5 text-white">
-            <Zap className="h-4 w-4" aria-hidden="true" fill="currentColor" />
-          </span>
+          <img src="/logo-mark.png" alt="" className="logo-mark-light-variant h-6 w-auto animate-logo-float" aria-hidden="true" />
+          <img src="/logo-mark-dark.png" alt="" className="logo-mark-dark-variant h-6 w-auto animate-logo-float" aria-hidden="true" />
           <span className="text-base font-bold tracking-tight text-navy-900">sellerClutch</span>
         </div>
         <div className="flex items-center gap-1">

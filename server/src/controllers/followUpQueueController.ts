@@ -4,7 +4,9 @@ import { listFollowUpQueue, FollowUpBucket } from '../services/outreach/followUp
 import { generateDraftForStep } from '../services/outreach/sequenceService';
 import * as campaignContactRepo from '../repositories/campaignContactRepo';
 import * as outreachDraftRepo from '../repositories/outreachDraftRepo';
-import { NotFoundError } from '../utils/appError';
+import * as outreachContactRepo from '../repositories/outreachContactRepo';
+import * as leadRepo from '../repositories/leadRepo';
+import { NotFoundError, ForbiddenError } from '../utils/appError';
 
 const BUCKETS: FollowUpBucket[] = ['3-day', '7-day', '14-day', '28-day', 'overdue'];
 
@@ -31,6 +33,14 @@ export const getFollowUpQueue = asyncHandler(async (req: Request, res: Response)
 export const generateFollowUpDraft = asyncHandler(async (req: Request, res: Response) => {
   const cc = await campaignContactRepo.findById(req.params.campaignContactId, req.user!.businessId);
   if (!cc) throw new NotFoundError('Follow-up not found');
+
+  if (req.user!.role === 'sales') {
+    const contact = await outreachContactRepo.findById(cc.contact_id, req.user!.businessId);
+    const lead = contact?.lead_id ? await leadRepo.findLeadById(contact.lead_id, req.user!.businessId) : null;
+    if (!lead || lead.assigned_user_id !== req.user!.userId) {
+      throw new ForbiddenError('You do not have access to this follow-up');
+    }
+  }
 
   const existing = (await outreachDraftRepo.listForCampaignContact(cc.id)).find(
     (d) => d.step_order === cc.current_step + 1 && d.status === 'draft'

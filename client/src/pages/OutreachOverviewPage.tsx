@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Zap, ArrowRight } from 'lucide-react';
 import * as outreachApi from '../services/outreachApi';
 import { OutreachProvidersOverview } from '../types';
@@ -8,9 +8,11 @@ import ErrorState from '../components/ErrorState';
 import OutreachTabs from '../components/OutreachTabs';
 import PageHeader from '../components/PageHeader';
 import { useToast } from '../hooks/useToast';
+import { useAuth } from '../hooks/useAuth';
 
 export default function OutreachOverviewPage(): React.ReactElement {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [providers, setProviders] = useState<OutreachProvidersOverview | null>(null);
   const [usage, setUsage] = useState<{ sentToday: number; sentThisMonth: number; failedThisMonth: number; bouncedThisMonth: number } | null>(null);
   const [dailyLimit, setDailyLimit] = useState(0);
@@ -36,8 +38,14 @@ export default function OutreachOverviewPage(): React.ReactElement {
   }
 
   useEffect(() => {
-    load();
-  }, []);
+    if (user?.role !== 'sales') load();
+  }, [user?.role]);
+
+  // Business-wide send usage/provider status is a Manager+/Owner view — a
+  // sales user's outreach work is their own assigned-lead Contacts/Drafts.
+  if (user?.role === 'sales') {
+    return <Navigate to="/outreach/contacts" replace />;
+  }
 
   async function handleTick() {
     setTicking(true);

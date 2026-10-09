@@ -64,19 +64,31 @@ export interface OutreachDraftWithRecipient extends OutreachDraftRow {
   lead_id: string | null;
 }
 
-export async function listPendingReview(businessId: string, campaignId?: string): Promise<OutreachDraftWithRecipient[]> {
+/**
+ * restrictToUserId scopes the review queue to drafts addressed to a contact
+ * whose linked lead is assigned to that user — the same rule as the Sent
+ * folder and the Follow-up queue, so a sales user never reviews a draft for
+ * someone else's lead.
+ */
+export async function listPendingReview(businessId: string, campaignId?: string, restrictToUserId?: string): Promise<OutreachDraftWithRecipient[]> {
   const select = `SELECT d.*, oc.contact_name AS recipient_name, oc.email AS recipient_email, oc.company_name, oc.lead_id
      FROM outreach_drafts d
      JOIN outreach_campaign_contacts cc ON cc.id = d.campaign_contact_id
-     JOIN outreach_contacts oc ON oc.id = cc.contact_id`;
+     JOIN outreach_contacts oc ON oc.id = cc.contact_id
+     LEFT JOIN leads l ON l.id = oc.lead_id`;
+  const conditions = [`d.business_id = $1`, `d.status = 'draft'`];
+  const params: unknown[] = [businessId];
+
   if (campaignId) {
-    const result = await query<OutreachDraftWithRecipient>(
-      `${select} WHERE d.business_id = $1 AND d.status = 'draft' AND cc.campaign_id = $2 ORDER BY d.created_at ASC`,
-      [businessId, campaignId]
-    );
-    return result.rows;
+    params.push(campaignId);
+    conditions.push(`cc.campaign_id = $${params.length}`);
   }
-  const result = await query<OutreachDraftWithRecipient>(`${select} WHERE d.business_id = $1 AND d.status = 'draft' ORDER BY d.created_at ASC`, [businessId]);
+  if (restrictToUserId) {
+    params.push(restrictToUserId);
+    conditions.push(`l.assigned_user_id = $${params.length}`);
+  }
+
+  const result = await query<OutreachDraftWithRecipient>(`${select} WHERE ${conditions.join(' AND ')} ORDER BY d.created_at ASC`, params);
   return result.rows;
 }
 

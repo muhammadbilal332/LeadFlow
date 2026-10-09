@@ -134,6 +134,19 @@ export async function countSentForContact(businessId: string, contactId: string)
   return Number(result.rows[0]?.count ?? 0);
 }
 
+/** Which of these contacts have ever had a message actually dispatched (sent/delivered/bounced) — for the Contacts list's "already emailed" state. */
+export async function listContactIdsWithSentMessage(businessId: string, contactIds: string[]): Promise<Set<string>> {
+  if (contactIds.length === 0) return new Set();
+  const placeholders = contactIds.map((_, i) => `$${i + 2}`).join(', ');
+  const result = await query<{ contact_id: string }>(
+    `SELECT DISTINCT cc.contact_id FROM outreach_messages m
+     JOIN outreach_campaign_contacts cc ON cc.id = m.campaign_contact_id
+     WHERE m.business_id = $1 AND m.status IN ('sent', 'delivered', 'bounced') AND cc.contact_id IN (${placeholders})`,
+    [businessId, ...contactIds]
+  );
+  return new Set(result.rows.map((r) => r.contact_id));
+}
+
 /** Every outgoing message ever sent to one outreach contact, across every campaign_contact enrollment (bulk campaigns and direct lead sends alike). */
 export async function listForContact(businessId: string, contactId: string): Promise<OutreachMessageRow[]> {
   const result = await query<OutreachMessageRow>(

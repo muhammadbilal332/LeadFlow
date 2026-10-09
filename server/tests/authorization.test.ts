@@ -86,6 +86,17 @@ describe('Role-based authorization', () => {
     expect(res.status).toBe(200);
   });
 
+  it('blocks sales users from the Reports page (owner/manager-only)', async () => {
+    const owner = await signupOwner(app);
+    const sales = await createSalesUser(app, owner.token);
+
+    const res = await request(app).get('/api/reports').set('Authorization', `Bearer ${sales.token}`);
+    expect(res.status).toBe(403);
+
+    const ownerRes = await request(app).get('/api/reports').set('Authorization', `Bearer ${owner.token}`);
+    expect(ownerRes.status).toBe(200);
+  });
+
   it('rejects requests with no authentication token on protected routes', async () => {
     const res = await request(app).get('/api/leads');
     expect(res.status).toBe(401);

@@ -25,13 +25,19 @@ router.post('/tick', requireAuthOrApiKey, tick);
 router.use(requireAuth);
 
 router.get('/contacts', contacts.listContacts);
-router.post('/contacts', contacts.createContact);
+// Manually adding a one-off contact sits outside any CRM lead, so a sales
+// user (whose Contacts view is scoped to their assigned leads) has no
+// legitimate use for it — same Manager+/Owner rule as sheet import.
+router.post('/contacts', requireRole('owner', 'manager'), contacts.createContact);
 router.get('/contacts/:id', contacts.getContact);
 router.delete('/contacts/:id', requireRole('owner', 'manager'), contacts.deleteContact);
 
-router.get('/sequences', sequences.listSequences);
+// Sequence templates are a business-wide configuration concept (they back
+// bulk sheet-import campaigns), not something scoped to one sales user's
+// leads — Manager+/Owner only, same as creating/editing one.
+router.get('/sequences', requireRole('owner', 'manager'), sequences.listSequences);
 router.post('/sequences', requireRole('owner', 'manager'), sequences.createSequence);
-router.get('/sequences/:id', sequences.getSequence);
+router.get('/sequences/:id', requireRole('owner', 'manager'), sequences.getSequence);
 router.patch('/sequences/:id', requireRole('owner', 'manager'), sequences.updateSequence);
 router.delete('/sequences/:id', requireRole('owner', 'manager'), sequences.deleteSequence);
 
@@ -42,9 +48,11 @@ router.post('/drafts/:id/approve', drafts.approveDraft);
 router.post('/drafts/:id/reject', drafts.rejectDraft);
 router.post('/drafts/:id/regenerate', drafts.regenerateDraft);
 
-router.get('/messages', messages.listMessages);
+// Unscoped, business-wide message/event feeds — the per-lead-scoped
+// equivalent sales actually uses is GET /sent (listSentMessages).
+router.get('/messages', requireRole('owner', 'manager'), messages.listMessages);
 router.get('/sent', messages.listSentMessages);
-router.get('/events', messages.listEvents);
+router.get('/events', requireRole('owner', 'manager'), messages.listEvents);
 
 router.get('/replies', replies.listReplies);
 router.post('/dev/simulate-reply', replies.simulateReply);
@@ -55,20 +63,22 @@ router.post('/campaign-contacts/:campaignContactId/generate-draft', generateFoll
 router.get('/inbox', listInbox);
 router.get('/threads/:threadId', getThreadConversation);
 
-router.get('/providers', providers.getProviders);
-router.get('/usage', providers.getUsage);
+router.get('/providers', requireRole('owner', 'manager'), providers.getProviders);
+router.get('/usage', requireRole('owner', 'manager'), providers.getUsage);
 
-router.get('/suppressions', suppressions.listSuppressions);
-router.post('/suppressions', suppressions.addSuppression);
-router.delete('/suppressions/:email', suppressions.removeSuppression);
+// The suppression list is business-wide do-not-contact data, not scoped to
+// any one sales user's leads — Manager+/Owner only.
+router.get('/suppressions', requireRole('owner', 'manager'), suppressions.listSuppressions);
+router.post('/suppressions', requireRole('owner', 'manager'), suppressions.addSuppression);
+router.delete('/suppressions/:email', requireRole('owner', 'manager'), suppressions.removeSuppression);
 
-router.get('/imports', sheetImports.listImports);
+router.get('/imports', requireRole('owner', 'manager'), sheetImports.listImports);
 // Sheets/CSV import is a Manager+/Owner capability (item 16/17 of the CRM
 // permission model) — an Outreach Specialist must not be able to bulk-import
 // contacts even by calling this endpoint directly.
 router.post('/imports', requireRole('owner', 'manager'), sheetImports.triggerImport);
 
-router.get('/settings', emailSettings.getSettings);
+router.get('/settings', requireRole('owner', 'manager'), emailSettings.getSettings);
 router.patch('/settings', requireRole('owner', 'manager'), emailSettings.updateSettings);
 
 export default router;

@@ -389,6 +389,12 @@ export interface OutreachContact {
   status: OutreachContactStatus;
   created_at: string;
   updated_at: string;
+  /** The linked CRM lead's current status (e.g. 'New', 'Contacted') — null when this contact isn't linked to a lead. */
+  lead_status?: string | null;
+  /** Whether this contact has ever actually been emailed (sent/delivered/bounced), from the Contacts list only. */
+  has_sent_message?: boolean;
+  /** Set when a reply-free follow-up step is due right now, from the Contacts list only. */
+  follow_up_due?: { campaign_contact_id: string; bucket: string; has_draft: boolean } | null;
 }
 
 export interface SequenceStep {

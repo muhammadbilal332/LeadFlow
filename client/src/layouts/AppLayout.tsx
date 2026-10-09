@@ -18,9 +18,17 @@ import { useAuth } from '../hooks/useAuth';
 import NotificationBell from '../components/NotificationBell';
 import ThemeToggle from '../components/ThemeToggle';
 
+interface NavItem {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  /** Omitted means visible to every role. */
+  roles?: string[];
+}
+
 // Grouped, the way a deliberately-designed product sidebar reads — not one
 // long undifferentiated list. Each group gets a small uppercase label.
-const NAV_GROUPS = [
+const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
   {
     label: 'Workspace',
     items: [
@@ -41,7 +49,7 @@ const NAV_GROUPS = [
     label: 'Growth',
     items: [
       { to: '/outreach', label: 'Outreach', icon: Send },
-      { to: '/reports', label: 'Reports', icon: BarChart3 },
+      { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['owner', 'manager'] },
     ],
   },
   {
@@ -95,11 +103,14 @@ export default function AppLayout(): React.ReactElement {
         <span className="text-lg font-bold tracking-tight text-navy-900">SellerClutch</span>
       </div>
       <nav className="flex-1 space-y-6 overflow-y-auto px-4 pb-4" aria-label="Main navigation">
-        {NAV_GROUPS.map((group) => (
+        {NAV_GROUPS.map((group) => {
+          const visibleItems = group.items.filter((item) => !item.roles || item.roles.includes(user?.role ?? ''));
+          if (visibleItems.length === 0) return null;
+          return (
           <div key={group.label}>
             <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{group.label}</p>
             <div className="mt-2 space-y-0.5">
-              {group.items.map((item) => (
+              {visibleItems.map((item) => (
                 <NavLink key={item.to} to={item.to} className={navLinkClass} onClick={() => setDrawerOpen(false)}>
                   {({ isActive }) => (
                     <>
@@ -111,7 +122,8 @@ export default function AppLayout(): React.ReactElement {
               ))}
             </div>
           </div>
-        ))}
+          );
+        })}
       </nav>
       <div className="border-t border-slate-200 p-4">
         <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">

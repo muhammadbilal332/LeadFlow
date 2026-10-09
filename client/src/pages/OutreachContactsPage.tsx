@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users2, Sheet, RefreshCw, Trash2 } from 'lucide-react';
+import { Plus, Users2, Sheet, RefreshCw, Trash2, Mail, MailCheck } from 'lucide-react';
 import * as outreachApi from '../services/outreachApi';
+import * as leadsApi from '../services/leadsApi';
 import { OutreachContact, SheetImport } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
@@ -10,11 +11,25 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import OutreachTabs from '../components/OutreachTabs';
 import { useToast } from '../hooks/useToast';
 import PageHeader from '../components/PageHeader';
+import { useAuth } from '../hooks/useAuth';
 
 const emptyForm = { email: '', contactName: '', companyName: '', industry: '', painPoints: '', possibleSolution: '' };
 
+const LEAD_STATUS_BADGE: Record<string, string> = {
+  New: 'bg-slate-100 text-slate-600',
+  Contacted: 'bg-blue-100 text-blue-700',
+  Replied: 'bg-purple-100 text-purple-700',
+  Qualified: 'bg-indigo-100 text-indigo-700',
+  Proposal: 'bg-amber-100 text-amber-700',
+  Negotiation: 'bg-orange-100 text-orange-700',
+  Won: 'bg-emerald-100 text-emerald-700',
+  Lost: 'bg-red-100 text-red-700',
+};
+
 export default function OutreachContactsPage(): React.ReactElement {
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const isSales = user?.role === 'sales';
   const navigate = useNavigate();
   const [contacts, setContacts] = useState<OutreachContact[]>([]);
   const [imports, setImports] = useState<SheetImport[]>([]);
@@ -25,18 +40,47 @@ export default function OutreachContactsPage(): React.ReactElement {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<OutreachContact | null>(null);
+  const [generatingFor, setGeneratingFor] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const [c, i] = await Promise.all([outreachApi.listContacts(), outreachApi.listImports()]);
+      const [c, i] = await Promise.all([outreachApi.listContacts(), isSales ? Promise.resolve({ imports: [] }) : outreachApi.listImports()]);
       setContacts(c.contacts);
       setImports(i.imports);
     } catch {
       setError('Unable to load contacts.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGenerateDraft(contact: OutreachContact) {
+    if (!contact.lead_id) return;
+    setGeneratingFor(contact.id);
+    try {
+      await leadsApi.composeLeadEmail(contact.lead_id);
+      showToast('Draft ready for your review.');
+      navigate('/outreach/drafts');
+    } catch {
+      showToast('Unable to generate a draft for this contact.', 'error');
+    } finally {
+      setGeneratingFor(null);
+    }
+  }
+
+  async function handleGenerateFollowUp(contact: OutreachContact) {
+    if (!contact.follow_up_due) return;
+    setGeneratingFor(contact.id);
+    try {
+      await outreachApi.generateFollowUpDraft(contact.follow_up_due.campaign_contact_id);
+      showToast('Follow-up draft ready for your review.');
+      navigate('/outreach/drafts');
+    } catch {
+      showToast('Unable to generate a follow-up draft for this contact.', 'error');
+    } finally {
+      setGeneratingFor(null);
     }
   }
 
@@ -100,9 +144,10 @@ export default function OutreachContactsPage(): React.ReactElement {
       <OutreachTabs />
       <PageHeader
         eyebrow="Outreach"
-        title="Outreach contacts"
-        description="Prospects you'll send personalized cold emails to."
+        title={isSales ? 'My contacts' : 'Outreach contacts'}
+        description={isSales ? 'Prospects from the leads assigned to you.' : "Prospects you'll send personalized cold emails to."}
         actions={
+          isSales ? undefined : (
           <>
           <button className="btn-secondary" onClick={handleImport} disabled={importing}>
             <Sheet className="h-4 w-4" /> {importing ? 'Importing...' : 'Import from sheet'}
@@ -111,10 +156,11 @@ export default function OutreachContactsPage(): React.ReactElement {
             <Plus className="h-4 w-4" /> Add contact
           </button>
           </>
+          )
         }
       />
 
-      {showForm && (
+      {showForm && !isSales && (
         <form onSubmit={handleCreate} className="card grid gap-3 p-4 sm:grid-cols-2">
           <input className="input" placeholder="Email *" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
           <input className="input" placeholder="Contact name" value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} />
@@ -132,9 +178,9 @@ export default function OutreachContactsPage(): React.ReactElement {
         {contacts.length === 0 ? (
           <EmptyState
             icon={<Users2 className="h-6 w-6" />}
-            title="No contacts yet"
-            description="Import from a Google Sheet (or the mock demo dataset) or add a contact manually."
-            action={<button className="btn-primary" onClick={handleImport}>Import from sheet</button>}
+            title={isSales ? 'No contacts yet' : 'No contacts yet'}
+            description={isSales ? 'Contacts appear here once a lead is assigned to you.' : 'Import from a Google Sheet (or the mock demo dataset) or add a contact manually.'}
+            action={isSales ? undefined : <button className="btn-primary" onClick={handleImport}>Import from sheet</button>}
           />
         ) : (
           <table className="min-w-full divide-y divide-slate-100 text-sm">
@@ -148,23 +194,67 @@ export default function OutreachContactsPage(): React.ReactElement {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {contacts.map((c) => (
-                <tr key={c.id}>
-                  <td className="px-4 py-2 font-medium text-slate-900">{c.contact_name || '—'}</td>
+              {contacts.map((c) => {
+                const followUpDue = c.follow_up_due;
+                const isNew = c.lead_status === 'New' && !c.has_sent_message;
+                const rowHighlight = followUpDue ? 'bg-sky-50/60' : isNew ? 'bg-amber-50/60' : undefined;
+                return (
+                <tr key={c.id} className={rowHighlight}>
+                  <td className="px-4 py-2 font-medium text-slate-900">
+                    {c.contact_name || '—'}
+                    {followUpDue ? (
+                      <span className="ml-2 inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700">Follow-up due</span>
+                    ) : isNew ? (
+                      <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">New</span>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-2 text-slate-600">{c.company_name || '—'}</td>
                   <td className="px-4 py-2 text-slate-600">{c.email}</td>
                   <td className="px-4 py-2">
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                      {c.status.replace('_', ' ')}
-                    </span>
+                    {c.lead_id && c.lead_status ? (
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${LEAD_STATUS_BADGE[c.lead_status] ?? 'bg-slate-100 text-slate-500'}`}>
+                        {c.lead_status}
+                      </span>
+                    ) : (
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {c.status.replace('_', ' ')}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-right">
-                    <button className="text-slate-400 hover:text-red-500" aria-label="Delete contact" onClick={() => setDeleteTarget(c)}>
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      {followUpDue ? (
+                        <button
+                          className="btn-secondary px-2.5 py-1 text-xs"
+                          onClick={() => handleGenerateFollowUp(c)}
+                          disabled={generatingFor === c.id}
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                          {generatingFor === c.id ? 'Generating...' : followUpDue.has_draft ? 'Review follow-up draft' : 'Generate follow-up draft'}
+                        </button>
+                      ) : c.has_sent_message ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-400">
+                          <MailCheck className="h-3.5 w-3.5" /> Email sent
+                        </span>
+                      ) : c.lead_id ? (
+                        <button
+                          className="btn-secondary px-2.5 py-1 text-xs"
+                          onClick={() => handleGenerateDraft(c)}
+                          disabled={generatingFor === c.id}
+                        >
+                          <Mail className="h-3.5 w-3.5" /> {generatingFor === c.id ? 'Generating...' : 'Generate draft'}
+                        </button>
+                      ) : null}
+                      {!isSales && (
+                        <button className="text-slate-400 hover:text-red-500" aria-label="Delete contact" onClick={() => setDeleteTarget(c)}>
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

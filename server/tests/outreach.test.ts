@@ -279,6 +279,83 @@ describe('Outreach platform (mock providers, full pipeline)', () => {
     expect(allLeadsRes.body.leads.length).toBe(importRes.body.import.imported_rows);
   });
 
+  it("a sales user's Contacts/Drafts/follow-up views never include another sales user's lead, and acting on it is forbidden", async () => {
+    const owner = await signupOwner(app);
+    const saleA = await createSalesUser(app, owner.token);
+    const saleB = await createSalesUser(app, owner.token);
+    const authA = { Authorization: `Bearer ${saleA.token}` };
+    const authB = { Authorization: `Bearer ${saleB.token}` };
+
+    await request(app).patch('/api/outreach/settings').set({ Authorization: `Bearer ${owner.token}` }).send({ defaultSenderEmail: 'scoping@leadflow-demo.test' });
+
+    // Each sales user creates (and is auto-assigned) their own lead, then
+    // drafts their own first-contact email — exactly the Lead Details "AI
+    // Email Composer" flow, never the bulk Contacts/Drafts page.
+    const leadA = await createLead(app, authA, { email: 'contact-a@scoping-demo.test' });
+    const leadB = await createLead(app, authB, { email: 'contact-b@scoping-demo.test' });
+    const composeA = await request(app).get(`/api/leads/${leadA.id}/compose-email`).set(authA);
+    const composeB = await request(app).get(`/api/leads/${leadB.id}/compose-email`).set(authB);
+    const draftA = composeA.body.draft;
+    const draftB = composeB.body.draft;
+
+    // Contacts: A sees only their own contact.
+    const contactsAsA = await request(app).get('/api/outreach/contacts').set(authA);
+    expect(contactsAsA.body.contacts.some((c: any) => c.lead_id === leadA.id)).toBe(true);
+    expect(contactsAsA.body.contacts.some((c: any) => c.lead_id === leadB.id)).toBe(false);
+
+    // Drafts: A sees only their own pending draft.
+    const draftsAsA = await request(app).get('/api/outreach/drafts').set(authA);
+    expect(draftsAsA.body.drafts.some((d: any) => d.id === draftA.id)).toBe(true);
+    expect(draftsAsA.body.drafts.some((d: any) => d.id === draftB.id)).toBe(false);
+
+    // Directly addressing B's contact/draft by id as A is forbidden, not just hidden from lists.
+    const contactsRes = await request(app).get('/api/outreach/contacts').set(authB);
+    const contactB = contactsRes.body.contacts.find((c: any) => c.lead_id === leadB.id);
+    expect((await request(app).get(`/api/outreach/contacts/${contactB.id}`).set(authA)).status).toBe(403);
+    expect((await request(app).get(`/api/outreach/drafts/${draftB.id}`).set(authA)).status).toBe(403);
+    expect((await request(app).post(`/api/outreach/drafts/${draftB.id}/approve`).set(authA).send({})).status).toBe(403);
+    expect((await request(app).post(`/api/outreach/drafts/${draftB.id}/reject`).set(authA).send({})).status).toBe(403);
+    expect((await request(app).post(`/api/outreach/drafts/${draftB.id}/regenerate`).set(authA).send({})).status).toBe(403);
+
+    // The owner is unrestricted and sees both.
+    const contactsAsOwner = await request(app).get('/api/outreach/contacts').set({ Authorization: `Bearer ${owner.token}` });
+    expect(contactsAsOwner.body.contacts.some((c: any) => c.lead_id === leadA.id)).toBe(true);
+    expect(contactsAsOwner.body.contacts.some((c: any) => c.lead_id === leadB.id)).toBe(true);
+  });
+
+  it("the follow-up queue's generate-draft endpoint cannot be used to generate a draft for another sales user's lead", async () => {
+    const owner = await signupOwner(app);
+    const saleA = await createSalesUser(app, owner.token);
+    const saleB = await createSalesUser(app, owner.token);
+    const authA = { Authorization: `Bearer ${saleA.token}` };
+    const authB = { Authorization: `Bearer ${saleB.token}` };
+
+    const leadB = await createLead(app, authB, { email: 'followup-b@scoping-demo.test' });
+    const composeB = await request(app).get(`/api/leads/${leadB.id}/compose-email`).set(authB);
+    const campaignContactIdForB = composeB.body.campaignContactId;
+
+    const res = await request(app).post(`/api/outreach/campaign-contacts/${campaignContactIdForB}/generate-draft`).set(authA).send({});
+    expect(res.status).toBe(403);
+  });
+
+  it('blocks sales users from the business-wide outreach management surfaces (sequences, suppressions, settings, providers, usage, imports, messages, events) and from manually adding a contact', async () => {
+    const owner = await signupOwner(app);
+    const sales = await createSalesUser(app, owner.token);
+    const auth = { Authorization: `Bearer ${sales.token}` };
+
+    expect((await request(app).get('/api/outreach/sequences').set(auth)).status).toBe(403);
+    expect((await request(app).get('/api/outreach/suppressions').set(auth)).status).toBe(403);
+    expect((await request(app).post('/api/outreach/suppressions').set(auth).send({ email: 'x@test.com' })).status).toBe(403);
+    expect((await request(app).get('/api/outreach/settings').set(auth)).status).toBe(403);
+    expect((await request(app).get('/api/outreach/providers').set(auth)).status).toBe(403);
+    expect((await request(app).get('/api/outreach/usage').set(auth)).status).toBe(403);
+    expect((await request(app).get('/api/outreach/imports').set(auth)).status).toBe(403);
+    expect((await request(app).post('/api/outreach/imports').set(auth).send({})).status).toBe(403);
+    expect((await request(app).get('/api/outreach/messages').set(auth)).status).toBe(403);
+    expect((await request(app).get('/api/outreach/events').set(auth)).status).toBe(403);
+    expect((await request(app).post('/api/outreach/contacts').set(auth).send({ email: 'manual@test.com' })).status).toBe(403);
+  });
+
   it('deletes a contact and a sequence not in active use', async () => {
     const owner = await signupOwner(app);
     const auth = { Authorization: `Bearer ${owner.token}` };

@@ -103,10 +103,31 @@ export default function App(): React.ReactElement {
             <Route path="/follow-ups" element={<FollowUpsPage />} />
             <Route path="/outreach" element={<OutreachOverviewPage />} />
             <Route path="/outreach/contacts" element={<OutreachContactsPage />} />
-            <Route path="/outreach/sequences" element={<OutreachSequencesPage />} />
+            <Route
+              path="/outreach/sequences"
+              element={
+                <RoleRoute roles={['owner', 'manager']}>
+                  <OutreachSequencesPage />
+                </RoleRoute>
+              }
+            />
             <Route path="/outreach/drafts" element={<OutreachDraftsPage />} />
-            <Route path="/outreach/suppressions" element={<OutreachSuppressionsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
+            <Route
+              path="/outreach/suppressions"
+              element={
+                <RoleRoute roles={['owner', 'manager']}>
+                  <OutreachSuppressionsPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <RoleRoute roles={['owner', 'manager']}>
+                  <ReportsPage />
+                </RoleRoute>
+              }
+            />
             <Route path="/settings/business" element={<SettingsBusinessPage />} />
             <Route
               path="/settings/users"

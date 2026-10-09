@@ -23,6 +23,10 @@ export interface OutreachContactRow {
   updated_at: string;
 }
 
+export interface OutreachContactWithLeadStatus extends OutreachContactRow {
+  lead_status: string | null;
+}
+
 export interface UpsertContactInput {
   businessId: string;
   sheetImportId?: string | null;
@@ -119,27 +123,42 @@ export async function upsertContact(input: UpsertContactInput): Promise<{ contac
   return { contact: result.rows[0], created: true };
 }
 
-export async function listContacts(businessId: string, opts: { search?: string; status?: string; limit?: number; offset?: number } = {}): Promise<{ contacts: OutreachContactRow[]; total: number }> {
-  const conditions = ['business_id = $1'];
+/**
+ * restrictToUserId scopes the list to contacts whose linked lead is assigned
+ * to that user — a sales user, who has no legitimate business-wide view of
+ * cold-outreach contacts, only ever sees contacts tied to their own leads.
+ * A contact with no lead_id at all (a bulk sheet-import row never linked to
+ * a CRM lead) is invisible to a scoped caller for the same reason.
+ */
+export async function listContacts(
+  businessId: string,
+  opts: { search?: string; status?: string; limit?: number; offset?: number; restrictToUserId?: string } = {}
+): Promise<{ contacts: OutreachContactWithLeadStatus[]; total: number }> {
+  const conditions = ['oc.business_id = $1'];
   const params: unknown[] = [businessId];
 
+  if (opts.restrictToUserId) {
+    params.push(opts.restrictToUserId);
+    conditions.push(`l.assigned_user_id = $${params.length}`);
+  }
   if (opts.status) {
     params.push(opts.status);
-    conditions.push(`status = $${params.length}`);
+    conditions.push(`oc.status = $${params.length}`);
   }
   if (opts.search) {
     params.push(`%${opts.search.toLowerCase()}%`);
-    conditions.push(`(LOWER(contact_name) LIKE $${params.length} OR LOWER(company_name) LIKE $${params.length} OR LOWER(email) LIKE $${params.length})`);
+    conditions.push(`(LOWER(oc.contact_name) LIKE $${params.length} OR LOWER(oc.company_name) LIKE $${params.length} OR LOWER(oc.email) LIKE $${params.length})`);
   }
 
   const whereClause = conditions.join(' AND ');
-  const countResult = await query<{ count: string }>(`SELECT COUNT(*)::text as count FROM outreach_contacts WHERE ${whereClause}`, params);
+  const fromClause = `FROM outreach_contacts oc LEFT JOIN leads l ON l.id = oc.lead_id`;
+  const countResult = await query<{ count: string }>(`SELECT COUNT(*)::text as count ${fromClause} WHERE ${whereClause}`, params);
 
   const limit = opts.limit ?? 50;
   const offset = opts.offset ?? 0;
   params.push(limit, offset);
-  const result = await query<OutreachContactRow>(
-    `SELECT * FROM outreach_contacts WHERE ${whereClause} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+  const result = await query<OutreachContactWithLeadStatus>(
+    `SELECT oc.*, l.status AS lead_status ${fromClause} WHERE ${whereClause} ORDER BY oc.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
 

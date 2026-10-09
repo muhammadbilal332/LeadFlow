@@ -111,9 +111,11 @@ export default function DashboardPage(): React.ReactElement {
               <Link to="/pipeline" className="btn bg-brand-500 text-white shadow-soft hover:bg-brand-600">
                 View pipeline <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link to="/reports" className="btn border border-white/20 bg-transparent text-white hover:bg-white/10">
-                View reports
-              </Link>
+              {user?.role !== 'sales' && (
+                <Link to="/reports" className="btn border border-white/20 bg-transparent text-white hover:bg-white/10">
+                  View reports
+                </Link>
+              )}
             </div>
           </div>
           <div className="grid shrink-0 grid-cols-3 gap-3 sm:gap-4">

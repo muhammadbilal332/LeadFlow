@@ -1,0 +1,68 @@
+name: Database backup
+
+# Dumps the LeadFlow Postgres database (schema `public` only — see
+# scripts/backup/backup-database.sh for why) every 15 minutes and uploads it
+# to a private Cloudflare R2 bucket. Independent of the outreach-tick.yml
+# scheduler and of n8n; does not touch the unrelated Amazon LeadFlow project.
+#
+# IMPORTANT: GitHub's cron schedule is best-effort, not exact. Scheduled
+# workflows can be delayed by several minutes (sometimes longer) under
+# GitHub-wide load, and a repository with no activity for 60+ days has its
+# scheduled workflows auto-disabled until someone opens the Actions tab.
+# "Every 15 minutes" describes the trigger interval, not a guaranteed
+# recovery-point objective — see docs/DATABASE_BACKUP_AND_RESTORE.md.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_DB_URL      - the DIRECT (non-pooled) Postgres connection
+#                           string, from Supabase: Project Settings ->
+#                           Database -> Connection string -> URI (not the
+#                           "Connection pooling" one — the app already uses
+#                           the pooler for its own traffic; pg_dump should
+#                           use a separate, direct connection so a backup
+#                           run never competes with the app for pooler slots,
+#                           which previously caused real request failures).
+#   R2_ACCOUNT_ID         - Cloudflare account id
+#   R2_ACCESS_KEY_ID      - R2 API token access key id (needs only
+#                           read/write on the one backup bucket)
+#   R2_SECRET_ACCESS_KEY  - R2 API token secret
+#   R2_BUCKET_NAME        - the private R2 bucket dedicated to these backups
+#
+# See docs/DATABASE_BACKUP_AND_RESTORE.md for how to obtain/create each of
+# these safely.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: leadflow-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installs a pg_dump/pg_restore client matching (or newer than) the
+      # Supabase project's Postgres 17 server — pg_dump is only reliably
+      # supported against a server the same age or older than the client.
+      - name: Install PostgreSQL 17 client tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          pg_dump --version
+
+      - name: Run backup
+        run: bash scripts/backup/backup-database.sh
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}

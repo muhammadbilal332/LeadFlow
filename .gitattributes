@@ -1,0 +1,4 @@
+# Shell scripts must always keep LF line endings, regardless of the local
+# Git autocrlf setting — these run on GitHub Actions' Linux runners, where a
+# CRLF-terminated shebang line breaks the script entirely ("bad interpreter").
+*.sh text eol=lf

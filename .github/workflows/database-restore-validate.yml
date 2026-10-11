@@ -1,0 +1,74 @@
+name: Database restore validation (disposable target only)
+
+# Manually-triggered only. Downloads a chosen backup from R2 and restores it
+# into a DISPOSABLE Postgres database so a restore can be proven to work
+# without ever touching production. This workflow has no access to the
+# production database's connection string (SUPABASE_DB_URL) at all — only
+# to RESTORE_TEST_DB_URL, a separate secret you point at a throwaway
+# Postgres instance (a free Neon/Railway database, a scratch Supabase
+# project, or a local tunnel). Never set RESTORE_TEST_DB_URL to the
+# production LeadFlow database.
+#
+# Required repository secrets (in addition to the R2_* ones used by
+# database-backup.yml):
+#   RESTORE_TEST_DB_URL   - connection string of a DISPOSABLE Postgres
+#                           database. This workflow runs `pg_restore --clean`
+#                           against it, which drops and recreates objects —
+#                           anything in this database WILL be destroyed.
+#
+# You must also type the confirmation phrase exactly when running this
+# workflow (Actions tab -> this workflow -> "Run workflow"). This cannot
+# verify the target is truly disposable — only you can guarantee that by
+# what you put in RESTORE_TEST_DB_URL — but it does make an accidental
+# click impossible to trigger a real restore by itself.
+
+on:
+  workflow_dispatch:
+    inputs:
+      object_key:
+        description: 'Backup object key to restore, e.g. leadflow/database/2026/10/11/leadflow-20261011T173245Z.dump (see the R2 bucket or a prior backup run''s summary)'
+        required: true
+        type: string
+      confirm_disposable:
+        description: 'Type exactly: yes-this-is-disposable (confirms RESTORE_TEST_DB_URL is a throwaway database you are OK destroying)'
+        required: true
+        type: string
+
+jobs:
+  restore-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse to proceed without exact confirmation
+        run: |
+          if [ "${{ inputs.confirm_disposable }}" != "yes-this-is-disposable" ]; then
+            echo "Confirmation phrase did not match exactly. Refusing to run a restore."
+            exit 1
+          fi
+
+      - name: Install PostgreSQL 17 client tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Restore into the disposable target and validate
+        run: bash scripts/backup/restore-database.sh
+        env:
+          OBJECT_KEY: ${{ inputs.object_key }}
+          I_CONFIRM_DISPOSABLE_TARGET: ${{ inputs.confirm_disposable }}
+          RESTORE_TARGET_DB_URL: ${{ secrets.RESTORE_TEST_DB_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+
+      - name: Spot-check table and row counts
+        run: |
+          psql "$RESTORE_TARGET_DB_URL" -c "SELECT schemaname, relname, n_live_tup FROM pg_stat_user_tables ORDER BY relname;"
+        env:
+          RESTORE_TARGET_DB_URL: ${{ secrets.RESTORE_TEST_DB_URL }}

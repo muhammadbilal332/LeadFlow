@@ -1,22 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
-import * as routingApi from '../services/routingApi';
-import * as usersApi from '../services/usersApi';
-import { RoutingRule, SlaSettings, User } from '../types';
-import SettingsTabs from '../components/SettingsTabs';
-import LoadingSpinner from '../components/LoadingSpinner';
-import ErrorState from '../components/ErrorState';
-import EmptyState from '../components/EmptyState';
-import ConfirmDialog from '../components/ConfirmDialog';
-import { useToast } from '../hooks/useToast';
-import PageHeader from '../components/PageHeader';
+import * as routingApi from '../../services/routingApi';
+import * as developerApi from '../../services/developerApi';
+import { RoutingRule, SlaSettings, PrimaryBusiness, PlatformUser } from '../../types';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import ErrorState from '../../components/ErrorState';
+import EmptyState from '../../components/EmptyState';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import { useToast } from '../../hooks/useToast';
 
 const FIELD_LABELS: Record<string, string> = { source: 'Source', industry: 'Industry', score: 'Score', always: 'Always (default)' };
 
-export default function SettingsRoutingPage(): React.ReactElement {
+/**
+ * Lead routing management, moved here from the owner-facing CRM entirely
+ * (see docs/DEVELOPER_DASHBOARD.md) — the business owner no longer has a
+ * page or API path to any of this.
+ *
+ * Scoped to the one real business via `businessId`, resolved once on load
+ * through GET /api/developer/primary-business. The assignable-person list
+ * reuses the existing platform-wide Users endpoint (already fetched by the
+ * Users page) rather than a new one, filtered to that business's non-
+ * developer accounts.
+ */
+export default function DeveloperRoutingPage(): React.ReactElement {
   const { showToast } = useToast();
+  const [business, setBusiness] = useState<PrimaryBusiness | null>(null);
   const [rules, setRules] = useState<RoutingRule[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<PlatformUser[]>([]);
   const [sla, setSla] = useState<SlaSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,9 +43,16 @@ export default function SettingsRoutingPage(): React.ReactElement {
     setLoading(true);
     setError(null);
     try {
-      const [rulesRes, usersRes, slaRes] = await Promise.all([routingApi.listRoutingRules(), usersApi.listUsers(), routingApi.getSlaSettings()]);
+      const { business: primary } = await developerApi.getPrimaryBusiness();
+      setBusiness(primary);
+
+      const [rulesRes, usersRes, slaRes] = await Promise.all([
+        routingApi.listRoutingRules(primary.id),
+        developerApi.listUsers(),
+        routingApi.getSlaSettings(primary.id),
+      ]);
       setRules(rulesRes.rules);
-      setUsers(usersRes.users);
+      setUsers(usersRes.users.filter((u) => u.business_id === primary.id && u.role !== 'developer'));
       setSla(slaRes.settings);
     } catch {
       setError('Unable to load routing settings.');
@@ -50,8 +67,9 @@ export default function SettingsRoutingPage(): React.ReactElement {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (!business) return;
     try {
-      await routingApi.createRoutingRule({
+      await routingApi.createRoutingRule(business.id, {
         name: form.name,
         priority: Number(form.priority),
         field: form.field,
@@ -70,8 +88,9 @@ export default function SettingsRoutingPage(): React.ReactElement {
   }
 
   async function toggleActive(rule: RoutingRule) {
+    if (!business) return;
     try {
-      await routingApi.updateRoutingRule(rule.id, { isActive: !rule.is_active });
+      await routingApi.updateRoutingRule(business.id, rule.id, { isActive: !rule.is_active });
       load();
     } catch {
       showToast('Unable to update rule.', 'error');
@@ -79,9 +98,9 @@ export default function SettingsRoutingPage(): React.ReactElement {
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !business) return;
     try {
-      await routingApi.deleteRoutingRule(deleteTarget.id);
+      await routingApi.deleteRoutingRule(business.id, deleteTarget.id);
       showToast('Routing rule deleted.');
       setDeleteTarget(null);
       load();
@@ -92,10 +111,10 @@ export default function SettingsRoutingPage(): React.ReactElement {
 
   async function handleSaveSla(e: React.FormEvent) {
     e.preventDefault();
-    if (!sla) return;
+    if (!sla || !business) return;
     setSavingSla(true);
     try {
-      const res = await routingApi.updateSlaSettings({
+      const res = await routingApi.updateSlaSettings(business.id, {
         hotMinutes: Number(sla.hot_minutes), highMinutes: Number(sla.high_minutes),
         mediumMinutes: Number(sla.medium_minutes), lowMinutes: Number(sla.low_minutes),
       });
@@ -110,10 +129,15 @@ export default function SettingsRoutingPage(): React.ReactElement {
 
   const userName = (id: string | null) => users.find((u) => u.id === id)?.name ?? 'Unknown';
 
+  if (loading) return <LoadingSpinner label="Loading routing settings..." />;
+  if (error || !business) return <ErrorState message={error ?? 'Unknown error'} onRetry={load} />;
+
   return (
     <div className="space-y-4">
-      <SettingsTabs />
-      <PageHeader eyebrow="Settings" title="Lead routing" description="Automatically assign new leads and set response-time targets." />
+      <div>
+        <h1 className="page-heading">Lead routing</h1>
+        <p className="mt-1 text-sm text-slate-500">Automatically assign new leads and set response-time targets for {business.name}. Moved here from the CRM — the business owner no longer manages this directly.</p>
+      </div>
 
       {sla && (
         <div className="card p-5">
@@ -190,11 +214,7 @@ export default function SettingsRoutingPage(): React.ReactElement {
       )}
 
       <div className="card overflow-hidden">
-        {loading ? (
-          <LoadingSpinner label="Loading rules..." />
-        ) : error ? (
-          <ErrorState message={error} onRetry={load} />
-        ) : rules.length === 0 ? (
+        {rules.length === 0 ? (
           <EmptyState title="No routing rules yet" description="New leads will remain unassigned until you add a rule, or a salesperson claims them manually." />
         ) : (
           <ul className="divide-y divide-slate-100">

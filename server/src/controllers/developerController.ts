@@ -5,13 +5,14 @@ import * as userRepo from '../repositories/userRepo';
 import * as systemEventRepo from '../repositories/systemEventRepo';
 import * as developerAuditLogRepo from '../repositories/developerAuditLogRepo';
 import * as automationExecutionLogRepo from '../repositories/automationExecutionLogRepo';
+import * as backupSheetConfigRepo from '../repositories/backupSheetConfigRepo';
 import { getPool, query } from '../db/pool';
 import { getEmailProvider } from '../providers/email';
 import { getOutreachAIProvider } from '../providers/ai';
 import { getSheetsProvider } from '../providers/sheets';
 import { getInboundProvider } from '../providers/inbound';
 import { env } from '../config/env';
-import { changeUserRoleSchema, setUserStatusSchema, daysQuerySchema } from '../validation/developerSchemas';
+import { changeUserRoleSchema, setUserStatusSchema, daysQuerySchema, backupSheetConfigSchema } from '../validation/developerSchemas';
 import { NotFoundError, BadRequestError } from '../utils/appError';
 
 async function audit(req: Request, action: string, targetType: string, targetId?: string | null, businessId?: string | null, metadata?: Record<string, unknown>) {
@@ -198,4 +199,31 @@ export const getLogs = asyncHandler(async (req: Request, res: Response) => {
 export const getAuditLogs = asyncHandler(async (_req: Request, res: Response) => {
   const logs = await developerAuditLogRepo.listAuditLogs(200);
   res.json({ logs });
+});
+
+// ===========================================================
+// Primary business — the one real business the Integrations/Routing
+// pages act on by default (see developerRepo.findPrimaryBusiness).
+// ===========================================================
+export const getPrimaryBusiness = asyncHandler(async (req: Request, res: Response) => {
+  const business = await developerRepo.findPrimaryBusiness(req.user!.businessId);
+  if (!business) throw new NotFoundError('No business has been set up yet');
+  res.json({ business });
+});
+
+// ===========================================================
+// Backup Google Sheet — a reference bookmark only (no credentials; see
+// docs/GOOGLE_SHEETS_BACKUP_LOGGING.md for the real, GitHub-secrets-based
+// backup configuration this is never a substitute for).
+// ===========================================================
+export const getBackupSheetConfig = asyncHandler(async (_req: Request, res: Response) => {
+  const config = await backupSheetConfigRepo.getBackupSheetConfig();
+  res.json({ config });
+});
+
+export const updateBackupSheetConfig = asyncHandler(async (req: Request, res: Response) => {
+  const input = backupSheetConfigSchema.parse(req.body);
+  const config = await backupSheetConfigRepo.upsertBackupSheetConfig(input.spreadsheetUrl, req.user!.userId);
+  await audit(req, 'updated_backup_sheet_config', 'backup_sheet_config', null, null, { spreadsheetUrl: input.spreadsheetUrl });
+  res.json({ config });
 });

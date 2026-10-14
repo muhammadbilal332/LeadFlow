@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { setupTestDatabase } from './testDb';
 import { createApp } from '../src/app';
-import { signupOwner, createSalesUser } from './helpers';
+import { signupOwner, createSalesUser, signupDeveloper } from './helpers';
 
 describe('Central lead intake: duplicate detection & merge', () => {
   beforeAll(async () => {
@@ -126,10 +126,14 @@ describe('Central lead intake: automatic assignment (routing rules & round robin
   it('assigns a lead to a specific user when a matching "user" routing rule exists', async () => {
     const owner = await signupOwner(app);
     const sales = await createSalesUser(app, owner.token);
+    // Routing rule management is developer-console-only now (see
+    // docs/DEVELOPER_DASHBOARD.md) — only the rule-based assignment
+    // behavior itself is under test here, not who can configure a rule.
+    const developer = await signupDeveloper(app);
 
     await request(app)
-      .post('/api/routing/rules')
-      .set('Authorization', `Bearer ${owner.token}`)
+      .post(`/api/routing/rules?businessId=${owner.businessId}`)
+      .set('Authorization', `Bearer ${developer.token}`)
       .send({ name: 'Instagram to rep', priority: 0, field: 'source', operator: 'equals', value: 'Instagram', assignmentType: 'user', assignUserId: sales.userId });
 
     const leadRes = await request(app)
@@ -144,10 +148,11 @@ describe('Central lead intake: automatic assignment (routing rules & round robin
     const owner = await signupOwner(app);
     const salesA = await createSalesUser(app, owner.token);
     const salesB = await createSalesUser(app, owner.token);
+    const developer = await signupDeveloper(app);
 
     await request(app)
-      .post('/api/routing/rules')
-      .set('Authorization', `Bearer ${owner.token}`)
+      .post(`/api/routing/rules?businessId=${owner.businessId}`)
+      .set('Authorization', `Bearer ${developer.token}`)
       .send({ name: 'Round robin all', priority: 0, field: 'always', operator: 'equals', assignmentType: 'round_robin' });
 
     const assignees: string[] = [];
@@ -167,9 +172,10 @@ describe('Central lead intake: automatic assignment (routing rules & round robin
   it('creates an automatic follow-up when a lead is assigned via routing', async () => {
     const owner = await signupOwner(app);
     const sales = await createSalesUser(app, owner.token);
+    const developer = await signupDeveloper(app);
     await request(app)
-      .post('/api/routing/rules')
-      .set('Authorization', `Bearer ${owner.token}`)
+      .post(`/api/routing/rules?businessId=${owner.businessId}`)
+      .set('Authorization', `Bearer ${developer.token}`)
       .send({ name: 'Always to rep', priority: 0, field: 'always', operator: 'equals', assignmentType: 'user', assignUserId: sales.userId });
 
     const leadRes = await request(app).post('/api/leads').set('Authorization', `Bearer ${owner.token}`).send({ name: 'Needs Followup', source: 'Website' });

@@ -2,7 +2,7 @@ import { apiRequest } from '../lib/api';
 import {
   PlatformOverview, TimeSeriesPoint, PlatformUser,
   OutreachLifecycleStats, RecentCampaignSummary, AutomationExecutionLog, AutomationSummary, HealthServices,
-  SystemEvent, DeveloperAuditLog, OutreachProvidersOverview,
+  SystemEvent, DeveloperAuditLog, OutreachProvidersOverview, PrimaryBusiness, BackupSheetConfig,
 } from '../types';
 
 export function getOverview(days = 30): Promise<{ overview: PlatformOverview; charts: { leadsOverTime: TimeSeriesPoint[]; emailsOverTime: TimeSeriesPoint[]; repliesOverTime: TimeSeriesPoint[] } }> {
@@ -57,4 +57,16 @@ export function getLogs(severity?: 'info' | 'warning' | 'error'): Promise<{ even
 
 export function getAuditLogs(): Promise<{ logs: DeveloperAuditLog[] }> {
   return apiRequest('/developer/audit');
+}
+
+export function getPrimaryBusiness(): Promise<{ business: PrimaryBusiness }> {
+  return apiRequest('/developer/primary-business');
+}
+
+export function getBackupSheetConfig(): Promise<{ config: BackupSheetConfig | null }> {
+  return apiRequest('/developer/backup-sheet');
+}
+
+export function updateBackupSheetConfig(spreadsheetUrl: string | null): Promise<{ config: BackupSheetConfig }> {
+  return apiRequest('/developer/backup-sheet', { method: 'PUT', body: { spreadsheetUrl } });
 }

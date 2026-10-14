@@ -63,15 +63,70 @@ existing in the database.
   `developer_audit_logs`, `system_events`, `automation_execution_logs`
   (originally `n8n_execution_logs`, renamed in `019_rename_automation_execution_logs.sql`
   once LeadFlow stopped depending specifically on n8n for scheduling).
-  `012_business_status.sql` — adds `businesses.is_active`. Both purely
-  additive; no existing table, column, or row is altered.
+  `012_business_status.sql` — adds `businesses.is_active`.
+  `020_backup_sheet_config.sql` — a singleton table for the Backup Google
+  Sheet reference link (below). All purely additive; no existing table,
+  column, or row is altered.
 - **API**: `/api/developer/*` — overview, users (+ role change,
   enable/disable), outreach lifecycle, scheduler status, health, providers,
-  usage, logs, audit.
+  usage, logs, audit, primary business, backup-sheet reference. Plus
+  `/api/integrations/*` and `/api/routing/*`, moved here from the owner
+  account (see "Integrations and Lead routing" below).
 - **Frontend**: `/developer/login` and `/developer/*` (Overview, Users,
-  Outreach, Automation Scheduler, Health, Providers, Usage, Logs, Audit,
-  Settings), with their own layout and navigation, entirely separate from
-  the CRM's `AppLayout`.
+  Outreach, Automation Scheduler, Integrations, Lead Routing, Health,
+  Providers, Usage, Logs, Audit, Settings), with their own layout and
+  navigation, entirely separate from the CRM's `AppLayout`.
+
+## Integrations and Lead routing — moved here from the owner account
+
+Both pages, and the APIs behind them, are now developer-only:
+
+- `/developer/integrations` (webhook secret management, outreach provider
+  status, outreach email defaults, the Google Sheets lead-import
+  connection, and a Backup Google Sheet reference bookmark — see below).
+  The **Meta (Facebook/Instagram) Lead Ads** connection card that used to
+  live here was dropped entirely, not carried over — see
+  docs/INTEGRATIONS.md section 3 for what that leaves disabled.
+- `/developer/routing` (SLA response-time targets and assignment rules) —
+  functionally identical to the old owner-facing page, just relocated.
+
+The business owner has no page or API path to either anymore —
+`/api/integrations/*` and `/api/routing/*` now require the `developer`
+role (`requireRole('developer')` in `server/src/routes/integrations.routes.ts`
+and `routing.routes.ts`), a 403 for owner/manager, same as every other
+`/api/developer/*` route.
+
+**Why a `businessId` query parameter**: unlike other `/api/developer/*`
+routes (platform-wide reads, or a specific user/business id), these two
+control a specific business's live configuration, and a developer
+account's own JWT carries its dedicated platform-scaffold business's id —
+never a real one (see "Architecture" above). `requireTargetBusiness`
+(`server/src/middleware/requireTargetBusiness.ts`) requires a `businessId`
+query parameter on every request, validates it against a real business,
+and overrides `req.user.businessId` with it for that request only — a
+missing or unknown id is a clean 400/404, never a silent fallback to the
+wrong business. The frontend discovers which business to target via
+`GET /api/developer/primary-business` (the oldest business that isn't the
+calling developer account's own), and a few shared routes
+(`/api/outreach/providers`, `/api/outreach/settings`) gained a parallel,
+opt-in `resolveTargetBusinessForDeveloper` middleware that is a no-op for
+owner/manager — their existing behavior on those two routes is unchanged.
+
+## Backup Google Sheet reference (Developer → Integrations)
+
+A one-field bookmark — just a spreadsheet URL — so the developer has a
+quick link to the spreadsheet used by the Cloudflare R2 secondary backup
+log/export system documented in
+[docs/GOOGLE_SHEETS_BACKUP_LOGGING.md](./GOOGLE_SHEETS_BACKUP_LOGGING.md).
+
+**This stores no credentials and configures nothing** — the GitHub Actions
+backup workflows are configured exclusively through GitHub repository
+secrets (`GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_SHEETS_SPREADSHEET_ID`) and
+never read this field. It exists purely so a developer looking at
+LeadFlow's own UI doesn't have to go dig the URL out of GitHub settings or
+their own notes. Stored in the `backup_sheet_config` table (a singleton —
+at most one row ever exists); every update is recorded to
+`developer_audit_logs` under the action `updated_backup_sheet_config`.
 
 ## Business management (removed)
 

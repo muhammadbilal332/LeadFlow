@@ -33,8 +33,10 @@ your own LeadFlow-hosted form.
 
 ## 2. Generic webhooks (n8n, Zapier, or anything else) — 🔧 READY FOR CONFIGURATION
 
-Go to **Settings → Integrations** and click **Generate webhook secret**. You
-get:
+Webhook secret management moved to the developer console (**Developer →
+Integrations**) — the business owner no longer has a page or an API path to
+this; see docs/DEVELOPER_DASHBOARD.md. In the developer console, click
+**Generate webhook secret**. You get:
 - A URL: `POST {PUBLIC_APP_URL}/api/webhooks/leads`
 - A secret, shown once — store it in your automation tool.
 
@@ -59,15 +61,21 @@ curl -X POST https://your-domain/api/webhooks/leads \
 
 Every request is authenticated by the secret (hashed at rest — the raw
 secret is never stored), validated with Zod, and logged to a delivery log
-visible in Settings → Integrations (status, timestamp, error if any). Rotate
+visible in Developer → Integrations (status, timestamp, error if any). Rotate
 the secret any time; the old one stops working immediately.
 
 **n8n setup**: add an HTTP Request node, method `POST`, URL as above, header
 `X-Webhook-Secret`, JSON body mapped to the fields above.
 
-## 3. Meta (Facebook/Instagram) Lead Ads — 🔑 REQUIRES EXTERNAL CREDENTIALS
+## 3. Meta (Facebook/Instagram) Lead Ads — connection UI removed
 
-**What's built and tested (no credentials needed):**
+The Page ID connection card that used to live on the Integrations page was
+deliberately dropped when Integrations moved to the developer console (not
+carried over — see docs/DEVELOPER_DASHBOARD.md). With no UI path left to
+call `configureMeta`, a Meta Page ID can no longer be associated with a
+business, so this integration is effectively disabled in practice even
+though the inbound webhook plumbing below is untouched and still tested:
+
 - `GET /api/webhooks/meta/leads` — the webhook verification handshake Meta
   requires when you subscribe a webhook (`hub.mode`/`hub.verify_token`/`hub.challenge`).
 - `POST /api/webhooks/meta/leads` — verifies Meta's `X-Hub-Signature-256`
@@ -78,37 +86,23 @@ the secret any time; the old one stops working immediately.
   leadgen ID, ad ID, ad set ID).
 - Idempotent lead creation keyed on `(business_id, external_source='meta', external_id=leadgen_id)`
   — a redelivered webhook event never creates a duplicate lead.
-- A settings UI (**Settings → Integrations**) to record which Meta Page ID
-  belongs to your business, so incoming events can be routed to the right
-  tenant.
 
-**What genuinely requires your own Meta credentials:**
+With no Page ID ever configured, every incoming event is logged and safely
+ignored (Meta still gets its required `200 OK` so it doesn't disable the
+subscription) — the same safe-no-op behavior this integration already had
+for an unconfigured page. The backend endpoints (`configureMeta`,
+`disconnectMeta` on `/api/integrations/meta`, developer-only) still exist
+and are still exercised by tests; only the UI path to reach them was
+removed. Re-enabling this would mean adding a UI card back (e.g. to
+Developer → Integrations) — a deliberate choice to make, not an oversight.
 
-Meta's leadgen webhook event only contains *IDs* — not the lead's actual
-name/email/phone. Fetching the real submitted data requires calling the
-Graph API with a **Page Access Token**, which only exists once you've done
-Meta's app setup. LeadFlow will not fabricate lead data — if no page access
-token is configured for a page, an incoming webhook event is logged and
-safely ignored (Meta still gets its required `200 OK` so it doesn't disable
-the subscription).
+## 4. API keys — ✅ IMPLEMENTED (unchanged, owner-facing)
 
-To go fully live:
-1. Create a Meta App at [developers.facebook.com](https://developers.facebook.com), add the **Webhooks** and **Lead Ads** products.
-2. Set `META_APP_ID`, `META_APP_SECRET`, and a `META_VERIFY_TOKEN` (any string you choose) in your server's `.env`.
-3. In the Meta App's Webhooks settings, subscribe to `leadgen` events for your Page, with callback URL `{PUBLIC_APP_URL}/api/webhooks/meta/leads` and the same verify token.
-4. Generate a Page Access Token for the connected Page and store it (this requires a small code change to call `configureMeta` with a token, since the current UI only captures the Page ID — see `server/src/repositories/integrationRepo.ts` `upsertIntegration`'s `accessTokenEncrypted` parameter). Set `WEBHOOK_ENCRYPTION_KEY` in `.env` so the token is encrypted at rest (AES-256-GCM) rather than stored in plaintext.
-5. In **Settings → Integrations**, enter the Page ID so LeadFlow knows which business incoming events belong to.
-6. Submit a real test lead through Meta's Lead Ads testing tool and confirm it appears in LeadFlow.
-
-Until step 6 has actually been done, this integration should be described as
-built and ready, not as "connected" or "live."
-
-## 4. API keys — ✅ IMPLEMENTED
-
-**Settings → Integrations → API keys** (or **Settings → API keys**) lets an
-owner create a key for server-to-server use. The full key (`lf_...`) is
-shown exactly once, at creation. Only a SHA-256 hash is stored. Revoke a key
-any time; revocation is immediate and irreversible.
+**Settings → API keys** lets an owner create a key for server-to-server
+use. The full key (`lf_...`) is shown exactly once, at creation. Only a
+SHA-256 hash is stored. Revoke a key any time; revocation is immediate and
+irreversible. Unlike webhook/routing/Meta, API keys were not moved to the
+developer console.
 
 ## 5. Campaigns & attribution — ✅ IMPLEMENTED
 

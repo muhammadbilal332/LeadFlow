@@ -3,7 +3,7 @@ import request from 'supertest';
 import { createHmac } from 'crypto';
 import { setupTestDatabase } from './testDb';
 import { createApp } from '../src/app';
-import { signupOwner } from './helpers';
+import { signupOwner, signupDeveloper } from './helpers';
 
 describe('Generic inbound webhook (n8n / API)', () => {
   beforeAll(async () => {
@@ -24,7 +24,11 @@ describe('Generic inbound webhook (n8n / API)', () => {
 
   it('creates a lead through the full intake pipeline when the secret is valid', async () => {
     const owner = await signupOwner(app);
-    const secretRes = await request(app).post('/api/integrations/webhook').set('Authorization', `Bearer ${owner.token}`);
+    const developer = await signupDeveloper(app);
+    // Webhook secret generation is developer-console-only now (see
+    // docs/DEVELOPER_DASHBOARD.md) — the developer acts on the owner's
+    // business explicitly via businessId.
+    const secretRes = await request(app).post(`/api/integrations/webhook?businessId=${owner.businessId}`).set('Authorization', `Bearer ${developer.token}`);
     expect(secretRes.status).toBe(201);
     const secret = secretRes.body.secret as string;
 
@@ -40,7 +44,7 @@ describe('Generic inbound webhook (n8n / API)', () => {
     expect(leadsRes.body.leads).toHaveLength(1);
     expect(leadsRes.body.leads[0].external_source).toBe('webhook');
 
-    const deliveries = await request(app).get('/api/integrations/webhook/deliveries').set('Authorization', `Bearer ${owner.token}`);
+    const deliveries = await request(app).get(`/api/integrations/webhook/deliveries?businessId=${owner.businessId}`).set('Authorization', `Bearer ${developer.token}`);
     expect(deliveries.body.deliveries.length).toBeGreaterThan(0);
     expect(deliveries.body.deliveries[0].status).toBe('Success');
   });
@@ -48,8 +52,9 @@ describe('Generic inbound webhook (n8n / API)', () => {
   it("never lets one business's webhook secret create leads in a different business", async () => {
     const ownerA = await signupOwner(app);
     const ownerB = await signupOwner(app);
+    const developer = await signupDeveloper(app);
 
-    const secretA = (await request(app).post('/api/integrations/webhook').set('Authorization', `Bearer ${ownerA.token}`)).body.secret;
+    const secretA = (await request(app).post(`/api/integrations/webhook?businessId=${ownerA.businessId}`).set('Authorization', `Bearer ${developer.token}`)).body.secret;
 
     await request(app).post('/api/webhooks/leads').set('X-Webhook-Secret', secretA).send({ name: 'Belongs To A' });
 
@@ -59,7 +64,8 @@ describe('Generic inbound webhook (n8n / API)', () => {
 
   it('rejects an invalid payload with a 422 and logs a failed delivery', async () => {
     const owner = await signupOwner(app);
-    const secret = (await request(app).post('/api/integrations/webhook').set('Authorization', `Bearer ${owner.token}`)).body.secret;
+    const developer = await signupDeveloper(app);
+    const secret = (await request(app).post(`/api/integrations/webhook?businessId=${owner.businessId}`).set('Authorization', `Bearer ${developer.token}`)).body.secret;
 
     const res = await request(app).post('/api/webhooks/leads').set('X-Webhook-Secret', secret).send({});
     expect(res.status).toBe(422);

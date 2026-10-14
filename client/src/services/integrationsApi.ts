@@ -1,28 +1,29 @@
 import { apiRequest } from '../lib/api';
 import { IntegrationsOverview, WebhookInfo, WebhookDelivery, ApiKey } from '../types';
 
-export function getIntegrationsOverview(): Promise<IntegrationsOverview> {
-  return apiRequest('/integrations');
+// Integrations are developer-console-only (see docs/DEVELOPER_DASHBOARD.md)
+// — every call here now runs as the `developer` role, which must say which
+// real business it's acting on via `businessId` (see
+// server/src/middleware/requireTargetBusiness.ts). API keys are unaffected
+// and keep working without it (still an owner/manager-facing feature).
+function withBusiness(path: string, businessId?: string): string {
+  return businessId ? `${path}${path.includes('?') ? '&' : '?'}businessId=${encodeURIComponent(businessId)}` : path;
 }
 
-export function createOrRotateWebhook(): Promise<{ webhook: WebhookInfo; secret: string }> {
-  return apiRequest('/integrations/webhook', { method: 'POST' });
+export function getIntegrationsOverview(businessId: string): Promise<IntegrationsOverview> {
+  return apiRequest(withBusiness('/integrations', businessId));
 }
 
-export function setWebhookActive(isActive: boolean): Promise<{ webhook: WebhookInfo }> {
-  return apiRequest('/integrations/webhook', { method: 'PATCH', body: { isActive } });
+export function createOrRotateWebhook(businessId: string): Promise<{ webhook: WebhookInfo; secret: string }> {
+  return apiRequest(withBusiness('/integrations/webhook', businessId), { method: 'POST' });
 }
 
-export function listWebhookDeliveries(): Promise<{ deliveries: WebhookDelivery[] }> {
-  return apiRequest('/integrations/webhook/deliveries');
+export function setWebhookActive(businessId: string, isActive: boolean): Promise<{ webhook: WebhookInfo }> {
+  return apiRequest(withBusiness('/integrations/webhook', businessId), { method: 'PATCH', body: { isActive } });
 }
 
-export function configureMeta(pageId: string): Promise<{ meta: { status: string; externalAccountId: string | null } }> {
-  return apiRequest('/integrations/meta', { method: 'POST', body: { pageId } });
-}
-
-export function disconnectMeta(): Promise<{ meta: { status: string; externalAccountId: string | null } }> {
-  return apiRequest('/integrations/meta', { method: 'DELETE' });
+export function listWebhookDeliveries(businessId: string): Promise<{ deliveries: WebhookDelivery[] }> {
+  return apiRequest(withBusiness('/integrations/webhook/deliveries', businessId));
 }
 
 // API keys

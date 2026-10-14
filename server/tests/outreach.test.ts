@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { setupTestDatabase } from './testDb';
 import { createApp } from '../src/app';
-import { signupOwner, createSalesUser } from './helpers';
+import { signupOwner, createSalesUser, signupDeveloper } from './helpers';
 
 describe('Outreach platform (mock providers, full pipeline)', () => {
   beforeAll(async () => {
@@ -238,7 +238,14 @@ describe('Outreach platform (mock providers, full pipeline)', () => {
     const auth = { Authorization: `Bearer ${owner.token}` };
 
     await request(app).patch('/api/outreach/settings').set(auth).send({ defaultSenderEmail: 'autopilot2@leadflow-demo.test' });
-    await request(app).post('/api/integrations/google-sheets').set(auth).send({ name: 'My Leads Sheet' });
+    // Google Sheets connection management is developer-console-only now
+    // (see docs/DEVELOPER_DASHBOARD.md) — acting on this owner's business
+    // explicitly via businessId.
+    const developer = await signupDeveloper(app);
+    await request(app)
+      .post(`/api/integrations/google-sheets?businessId=${owner.businessId}`)
+      .set('Authorization', `Bearer ${developer.token}`)
+      .send({ name: 'My Leads Sheet' });
 
     const firstImportRes = await request(app).post('/api/outreach/imports').set(auth).send({});
     expect(firstImportRes.body.campaign).toBeTruthy();

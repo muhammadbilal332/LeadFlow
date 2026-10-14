@@ -1,8 +1,16 @@
 import { apiRequest } from '../lib/api';
 import { RoutingRule, SlaSettings } from '../types';
 
-export function listRoutingRules(): Promise<{ rules: RoutingRule[] }> {
-  return apiRequest('/routing/rules');
+// Lead routing is developer-console-only (see docs/DEVELOPER_DASHBOARD.md)
+// — every call here now runs as the `developer` role, which must say which
+// real business it's acting on via `businessId` (see
+// server/src/middleware/requireTargetBusiness.ts).
+function withBusiness(path: string, businessId?: string): string {
+  return businessId ? `${path}${path.includes('?') ? '&' : '?'}businessId=${encodeURIComponent(businessId)}` : path;
+}
+
+export function listRoutingRules(businessId: string): Promise<{ rules: RoutingRule[] }> {
+  return apiRequest(withBusiness('/routing/rules', businessId));
 }
 
 export interface RoutingRuleInput {
@@ -15,22 +23,22 @@ export interface RoutingRuleInput {
   assignUserId?: string | null;
 }
 
-export function createRoutingRule(input: RoutingRuleInput): Promise<{ rule: RoutingRule }> {
-  return apiRequest('/routing/rules', { method: 'POST', body: input });
+export function createRoutingRule(businessId: string, input: RoutingRuleInput): Promise<{ rule: RoutingRule }> {
+  return apiRequest(withBusiness('/routing/rules', businessId), { method: 'POST', body: input });
 }
 
-export function updateRoutingRule(id: string, input: Partial<RoutingRuleInput & { isActive: boolean }>): Promise<{ rule: RoutingRule }> {
-  return apiRequest(`/routing/rules/${id}`, { method: 'PATCH', body: input });
+export function updateRoutingRule(businessId: string, id: string, input: Partial<RoutingRuleInput & { isActive: boolean }>): Promise<{ rule: RoutingRule }> {
+  return apiRequest(withBusiness(`/routing/rules/${id}`, businessId), { method: 'PATCH', body: input });
 }
 
-export function deleteRoutingRule(id: string): Promise<void> {
-  return apiRequest(`/routing/rules/${id}`, { method: 'DELETE' });
+export function deleteRoutingRule(businessId: string, id: string): Promise<void> {
+  return apiRequest(withBusiness(`/routing/rules/${id}`, businessId), { method: 'DELETE' });
 }
 
-export function getSlaSettings(): Promise<{ settings: SlaSettings }> {
-  return apiRequest('/routing/sla');
+export function getSlaSettings(businessId: string): Promise<{ settings: SlaSettings }> {
+  return apiRequest(withBusiness('/routing/sla', businessId));
 }
 
-export function updateSlaSettings(input: Partial<{ hotMinutes: number; highMinutes: number; mediumMinutes: number; lowMinutes: number }>): Promise<{ settings: SlaSettings }> {
-  return apiRequest('/routing/sla', { method: 'PATCH', body: input });
+export function updateSlaSettings(businessId: string, input: Partial<{ hotMinutes: number; highMinutes: number; mediumMinutes: number; lowMinutes: number }>): Promise<{ settings: SlaSettings }> {
+  return apiRequest(withBusiness('/routing/sla', businessId), { method: 'PATCH', body: input });
 }

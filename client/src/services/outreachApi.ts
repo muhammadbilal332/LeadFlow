@@ -6,6 +6,10 @@ import {
   EmailThreadWithConversation,
 } from '../types';
 
+function withBusiness(path: string, businessId?: string): string {
+  return businessId ? `${path}${path.includes('?') ? '&' : '?'}businessId=${encodeURIComponent(businessId)}` : path;
+}
+
 // --- Contacts ---
 export function listContacts(params: { search?: string; status?: string; page?: number } = {}): Promise<{ contacts: OutreachContact[]; total: number }> {
   const qs = new URLSearchParams();
@@ -84,8 +88,11 @@ export function simulateReply(input: { fromEmail: string; body: string; subject?
 }
 
 // --- Providers / usage ---
-export function getProviders(): Promise<{ providers: OutreachProvidersOverview }> {
-  return apiRequest('/outreach/providers');
+// businessId is only ever passed by the developer-console Integrations page
+// (see docs/DEVELOPER_DASHBOARD.md); omitted, this is unchanged for the
+// owner/manager-facing Outreach Overview page that also calls this.
+export function getProviders(businessId?: string): Promise<{ providers: OutreachProvidersOverview }> {
+  return apiRequest(withBusiness('/outreach/providers', businessId));
 }
 
 export function getUsage(): Promise<{ provider: string; usage: { sentToday: number; sentThisMonth: number; failedThisMonth: number; bouncedThisMonth: number }; dailyLimit: number }> {
@@ -123,12 +130,12 @@ export function triggerImport(opts: { connectionId?: string; campaignId?: string
 }
 
 // --- Settings ---
-export function getSettings(): Promise<{ settings: EmailSettings | null }> {
-  return apiRequest('/outreach/settings');
+export function getSettings(businessId?: string): Promise<{ settings: EmailSettings | null }> {
+  return apiRequest(withBusiness('/outreach/settings', businessId));
 }
 
-export function updateSettings(input: Partial<{ defaultSenderName: string | null; defaultSenderEmail: string | null; defaultReplyTo: string | null; dailySendLimit: number; voiceDescription: string | null }>): Promise<{ settings: EmailSettings }> {
-  return apiRequest('/outreach/settings', { method: 'PATCH', body: input });
+export function updateSettings(input: Partial<{ defaultSenderName: string | null; defaultSenderEmail: string | null; defaultReplyTo: string | null; dailySendLimit: number; voiceDescription: string | null }>, businessId?: string): Promise<{ settings: EmailSettings }> {
+  return apiRequest(withBusiness('/outreach/settings', businessId), { method: 'PATCH', body: input });
 }
 
 // --- Follow-up queue (3/7/8/9-day + Overdue morning work queue) ---
@@ -154,15 +161,16 @@ export function getSentMessages(): Promise<{ messages: SentMessage[] }> {
   return apiRequest('/outreach/sent');
 }
 
-// --- Google Sheets connection (under integrations) ---
-export function getSheetConnection(): Promise<{ connection: { id: string; name: string; spreadsheet_id: string | null; sheet_range: string; status: string; last_synced_at: string | null } | null; provider: { name: string; selected: string } }> {
-  return apiRequest('/integrations/google-sheets');
+// --- Google Sheets connection (under integrations — developer-console
+// only, see docs/DEVELOPER_DASHBOARD.md; businessId is required here) ---
+export function getSheetConnection(businessId: string): Promise<{ connection: { id: string; name: string; spreadsheet_id: string | null; sheet_range: string; status: string; last_synced_at: string | null } | null; provider: { name: string; selected: string } }> {
+  return apiRequest(withBusiness('/integrations/google-sheets', businessId));
 }
 
-export function upsertSheetConnection(input: { name: string; spreadsheetId?: string | null; sheetRange?: string }): Promise<{ connection: unknown }> {
-  return apiRequest('/integrations/google-sheets', { method: 'POST', body: input });
+export function upsertSheetConnection(businessId: string, input: { name: string; spreadsheetId?: string | null; sheetRange?: string }): Promise<{ connection: unknown }> {
+  return apiRequest(withBusiness('/integrations/google-sheets', businessId), { method: 'POST', body: input });
 }
 
-export function disconnectSheetConnection(): Promise<void> {
-  return apiRequest('/integrations/google-sheets', { method: 'DELETE' });
+export function disconnectSheetConnection(businessId: string): Promise<void> {
+  return apiRequest(withBusiness('/integrations/google-sheets', businessId), { method: 'DELETE' });
 }

@@ -1,45 +1,60 @@
 import React, { useEffect, useState } from 'react';
-import { Copy, RefreshCw, Webhook as WebhookIcon, Facebook, Mail, Sparkles, Sheet, Workflow } from 'lucide-react';
-import * as integrationsApi from '../services/integrationsApi';
-import * as outreachApi from '../services/outreachApi';
-import { IntegrationsOverview, WebhookDelivery, OutreachProvidersOverview, EmailSettings } from '../types';
-import SettingsTabs from '../components/SettingsTabs';
-import LoadingSpinner from '../components/LoadingSpinner';
-import ErrorState from '../components/ErrorState';
-import ConfirmDialog from '../components/ConfirmDialog';
-import { useToast } from '../hooks/useToast';
-import { isLikelyPersonalEmailDomain } from '../lib/outreachErrors';
-import PageHeader from '../components/PageHeader';
+import { Copy, RefreshCw, Webhook as WebhookIcon, Mail, Sparkles, Sheet, Workflow, DatabaseBackup } from 'lucide-react';
+import * as integrationsApi from '../../services/integrationsApi';
+import * as outreachApi from '../../services/outreachApi';
+import * as developerApi from '../../services/developerApi';
+import { IntegrationsOverview, WebhookDelivery, OutreachProvidersOverview, EmailSettings, PrimaryBusiness, BackupSheetConfig } from '../../types';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import ErrorState from '../../components/ErrorState';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import { useToast } from '../../hooks/useToast';
+import { isLikelyPersonalEmailDomain } from '../../lib/outreachErrors';
 
-export default function SettingsIntegrationsPage(): React.ReactElement {
+/**
+ * Integrations management, moved here from the owner-facing CRM entirely
+ * (see docs/DEVELOPER_DASHBOARD.md) — the business owner no longer has a
+ * page or API path to any of this. The Meta (Facebook/Instagram) Lead Ads
+ * connection card that used to live here was deliberately dropped, not
+ * carried over.
+ *
+ * Every call below is scoped to the one real business (never this
+ * developer account's own platform-scaffold business) via `businessId`,
+ * resolved once on load through GET /api/developer/primary-business.
+ */
+export default function DeveloperIntegrationsPage(): React.ReactElement {
   const { showToast } = useToast();
+  const [business, setBusiness] = useState<PrimaryBusiness | null>(null);
   const [overview, setOverview] = useState<IntegrationsOverview | null>(null);
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
   const [providers, setProviders] = useState<OutreachProvidersOverview | null>(null);
   const [emailSettings, setEmailSettings] = useState<EmailSettings | null>(null);
   const [sheetConnection, setSheetConnection] = useState<{ name: string; spreadsheet_id: string | null; sheet_range: string } | null>(null);
+  const [backupSheet, setBackupSheet] = useState<BackupSheetConfig | null>(null);
   const [emailForm, setEmailForm] = useState({ defaultSenderName: '', defaultSenderEmail: '', defaultReplyTo: '', dailySendLimit: 100, voiceDescription: '' });
   const [sheetForm, setSheetForm] = useState({ name: '', spreadsheetId: '', sheetRange: 'Sheet1' });
+  const [backupSheetUrl, setBackupSheetUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [confirmRotate, setConfirmRotate] = useState(false);
-  const [pageIdInput, setPageIdInput] = useState('');
 
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const [ov, dl, p, es, sc] = await Promise.all([
-        integrationsApi.getIntegrationsOverview(),
-        integrationsApi.listWebhookDeliveries().catch(() => ({ deliveries: [] })),
-        outreachApi.getProviders(),
-        outreachApi.getSettings(),
-        outreachApi.getSheetConnection(),
+      const { business: primary } = await developerApi.getPrimaryBusiness();
+      setBusiness(primary);
+
+      const [ov, dl, p, es, sc, bs] = await Promise.all([
+        integrationsApi.getIntegrationsOverview(primary.id),
+        integrationsApi.listWebhookDeliveries(primary.id).catch(() => ({ deliveries: [] })),
+        outreachApi.getProviders(primary.id),
+        outreachApi.getSettings(primary.id),
+        outreachApi.getSheetConnection(primary.id),
+        developerApi.getBackupSheetConfig(),
       ]);
       setOverview(ov);
       setDeliveries(dl.deliveries);
-      setPageIdInput(ov.meta.externalAccountId ?? '');
       setProviders(p.providers);
       setEmailSettings(es.settings);
       if (es.settings) {
@@ -53,6 +68,8 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
       }
       setSheetConnection(sc.connection);
       if (sc.connection) setSheetForm({ name: sc.connection.name, spreadsheetId: sc.connection.spreadsheet_id ?? '', sheetRange: sc.connection.sheet_range });
+      setBackupSheet(bs.config);
+      setBackupSheetUrl(bs.config?.spreadsheet_url ?? '');
     } catch {
       setError('Unable to load integration settings.');
     } finally {
@@ -60,10 +77,15 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
     }
   }
 
+  useEffect(() => {
+    load();
+  }, []);
+
   async function handleSaveEmailSettings(e: React.FormEvent) {
     e.preventDefault();
+    if (!business) return;
     try {
-      await outreachApi.updateSettings(emailForm);
+      await outreachApi.updateSettings(emailForm, business.id);
       showToast('Outreach email settings saved.');
       load();
     } catch {
@@ -73,8 +95,9 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
 
   async function handleSaveSheetConnection(e: React.FormEvent) {
     e.preventDefault();
+    if (!business) return;
     try {
-      await outreachApi.upsertSheetConnection(sheetForm);
+      await outreachApi.upsertSheetConnection(business.id, sheetForm);
       showToast('Google Sheets connection saved.');
       load();
     } catch {
@@ -82,13 +105,21 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
     }
   }
 
-  useEffect(() => {
-    load();
-  }, []);
+  async function handleSaveBackupSheet(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await developerApi.updateBackupSheetConfig(backupSheetUrl.trim() || null);
+      showToast('Backup Google Sheet reference saved.');
+      load();
+    } catch {
+      showToast('Unable to save backup sheet reference.', 'error');
+    }
+  }
 
   async function handleGenerateWebhook() {
+    if (!business) return;
     try {
-      const res = await integrationsApi.createOrRotateWebhook();
+      const res = await integrationsApi.createOrRotateWebhook(business.id);
       setNewSecret(res.secret);
       setConfirmRotate(false);
       load();
@@ -106,34 +137,15 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
     }
   }
 
-  async function handleSaveMeta(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      await integrationsApi.configureMeta(pageIdInput);
-      showToast('Meta page configured.');
-      load();
-    } catch {
-      showToast('Unable to save Meta configuration.', 'error');
-    }
-  }
-
-  async function handleDisconnectMeta() {
-    try {
-      await integrationsApi.disconnectMeta();
-      showToast('Meta integration disconnected.');
-      load();
-    } catch {
-      showToast('Unable to disconnect.', 'error');
-    }
-  }
-
   if (loading) return <LoadingSpinner label="Loading integrations..." />;
-  if (error || !overview) return <ErrorState message={error ?? 'Unknown error'} onRetry={load} />;
+  if (error || !overview || !business) return <ErrorState message={error ?? 'Unknown error'} onRetry={load} />;
 
   return (
     <div className="space-y-4">
-      <SettingsTabs />
-      <PageHeader eyebrow="Settings" title="Integrations" description="Connect external tools that send leads into SellerClutch." />
+      <div>
+        <h1 className="page-heading">Integrations</h1>
+        <p className="mt-1 text-sm text-slate-500">Connect external tools that send leads into {business.name}. Moved here from the CRM — the business owner no longer manages this directly.</p>
+      </div>
 
       <div className="card p-5">
         <div className="flex items-center gap-2">
@@ -192,36 +204,6 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
         )}
       </div>
 
-      <div className="card p-5">
-        <div className="flex items-center gap-2">
-          <Facebook className="h-5 w-5 text-brand-600" />
-          <h2 className="text-sm font-semibold text-slate-900">Meta (Facebook / Instagram) Lead Ads</h2>
-        </div>
-        <p className="mt-1 text-sm text-slate-500">
-          Status: <span className="font-medium">{overview.meta.status}</span>
-          {!overview.meta.hasCredentialsConfigured && ' — server-side Meta App credentials are not configured yet (see docs/INTEGRATIONS.md).'}
-        </p>
-        <p className="mt-2 text-xs text-slate-500">
-          Webhook URL for your Meta App: <code className="rounded bg-slate-100 px-1">{overview.meta.webhookUrl}</code>
-        </p>
-
-        <form onSubmit={handleSaveMeta} className="mt-3 flex flex-wrap gap-2">
-          <input
-            className="input max-w-xs"
-            placeholder="Meta Page ID"
-            value={pageIdInput}
-            onChange={(e) => setPageIdInput(e.target.value)}
-          />
-          <button type="submit" className="btn-primary">Save Page ID</button>
-          {overview.meta.status === 'Connected' && (
-            <button type="button" className="btn-secondary" onClick={handleDisconnectMeta}>Disconnect</button>
-          )}
-        </form>
-        <p className="mt-2 text-xs text-slate-500">
-          This links incoming Meta webhook events for that Page ID to your business. Full production setup (App Review, webhook subscription, and a Page Access Token) is documented in docs/INTEGRATIONS.md.
-        </p>
-      </div>
-
       {providers && (
         <div className="card p-5">
           <h2 className="text-sm font-semibold text-slate-900">Outreach providers</h2>
@@ -272,7 +254,7 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
       <div className="card p-5">
         <div className="flex items-center gap-2">
           <Sheet className="h-5 w-5 text-brand-600" />
-          <h2 className="text-sm font-semibold text-slate-900">Google Sheets</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Google Sheets (lead import)</h2>
         </div>
         <p className="mt-1 text-sm text-slate-500">
           {providers?.sheets.selected === 'mock'
@@ -288,6 +270,28 @@ export default function SettingsIntegrationsPage(): React.ReactElement {
           </div>
         </form>
         {sheetConnection && <p className="mt-2 text-xs text-slate-500">Connected: {sheetConnection.name}</p>}
+      </div>
+
+      <div className="card p-5">
+        <div className="flex items-center gap-2">
+          <DatabaseBackup className="h-5 w-5 text-brand-600" />
+          <h2 className="text-sm font-semibold text-slate-900">Backup Google Sheet</h2>
+        </div>
+        <p className="mt-1 text-sm text-slate-500">
+          A reference link only — bookmarks the spreadsheet used by the Cloudflare R2 secondary backup log/export system
+          (see docs/GOOGLE_SHEETS_BACKUP_LOGGING.md). No credentials are stored here; the backup workflows themselves are
+          configured exclusively through GitHub repository secrets, never through this field.
+        </p>
+        <form onSubmit={handleSaveBackupSheet} className="mt-3 flex flex-wrap gap-2">
+          <input
+            className="input max-w-md flex-1"
+            placeholder="https://docs.google.com/spreadsheets/d/..."
+            value={backupSheetUrl}
+            onChange={(e) => setBackupSheetUrl(e.target.value)}
+          />
+          <button type="submit" className="btn-primary">Save</button>
+        </form>
+        {backupSheet?.updated_at && <p className="mt-2 text-xs text-slate-500">Last updated {new Date(backupSheet.updated_at).toLocaleString()}</p>}
       </div>
 
       <ConfirmDialog

@@ -21,9 +21,7 @@ import FollowUpsPage from './pages/FollowUpsPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsUsersPage from './pages/SettingsUsersPage';
 import SettingsBusinessPage from './pages/SettingsBusinessPage';
-import SettingsRoutingPage from './pages/SettingsRoutingPage';
 import SettingsAutomationsPage from './pages/SettingsAutomationsPage';
-import SettingsIntegrationsPage from './pages/SettingsIntegrationsPage';
 import SettingsApiKeysPage from './pages/SettingsApiKeysPage';
 import InboxPage from './pages/InboxPage';
 import SentPage from './pages/SentPage';
@@ -47,6 +45,8 @@ import DeveloperUsagePage from './pages/developer/DeveloperUsagePage';
 import DeveloperLogsPage from './pages/developer/DeveloperLogsPage';
 import DeveloperAuditPage from './pages/developer/DeveloperAuditPage';
 import DeveloperSettingsPage from './pages/developer/DeveloperSettingsPage';
+import DeveloperIntegrationsPage from './pages/developer/DeveloperIntegrationsPage';
+import DeveloperRoutingPage from './pages/developer/DeveloperRoutingPage';
 
 export default function App(): React.ReactElement {
   return (
@@ -80,6 +80,8 @@ export default function App(): React.ReactElement {
             <Route path="/developer/logs" element={<DeveloperLogsPage />} />
             <Route path="/developer/audit" element={<DeveloperAuditPage />} />
             <Route path="/developer/settings" element={<DeveloperSettingsPage />} />
+            <Route path="/developer/integrations" element={<DeveloperIntegrationsPage />} />
+            <Route path="/developer/routing" element={<DeveloperRoutingPage />} />
           </Route>
 
           <Route
@@ -138,26 +140,10 @@ export default function App(): React.ReactElement {
               }
             />
             <Route
-              path="/settings/routing"
-              element={
-                <RoleRoute roles={['owner', 'manager']}>
-                  <SettingsRoutingPage />
-                </RoleRoute>
-              }
-            />
-            <Route
               path="/settings/automations"
               element={
                 <RoleRoute roles={['owner', 'manager']}>
                   <SettingsAutomationsPage />
-                </RoleRoute>
-              }
-            />
-            <Route
-              path="/settings/integrations"
-              element={
-                <RoleRoute roles={['owner', 'manager']}>
-                  <SettingsIntegrationsPage />
                 </RoleRoute>
               }
             />

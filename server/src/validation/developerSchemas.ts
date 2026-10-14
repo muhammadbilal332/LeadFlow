@@ -11,3 +11,7 @@ export const setUserStatusSchema = z.object({
 export const daysQuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(365).default(30),
 });
+
+export const backupSheetConfigSchema = z.object({
+  spreadsheetUrl: z.string().trim().max(2000).nullable(),
+});

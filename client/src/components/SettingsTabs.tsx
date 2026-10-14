@@ -7,11 +7,13 @@ import { useAuth } from '../hooks/useAuth';
 // automation-rule engine on every lead, and the scheduler API key) are untouched
 // and still reachable directly at /settings/automations and
 // /settings/api-keys.
+//
+// Lead routing and Integrations were moved here from the owner-facing CRM
+// entirely (see docs/DEVELOPER_DASHBOARD.md) — the business owner no
+// longer has a page for either.
 const OWNER_ONLY_TABS = [
   { to: '/settings/business', label: 'Business' },
   { to: '/settings/users', label: 'Team members' },
-  { to: '/settings/routing', label: 'Lead routing' },
-  { to: '/settings/integrations', label: 'Integrations' },
 ];
 
 export default function SettingsTabs(): React.ReactElement | null {

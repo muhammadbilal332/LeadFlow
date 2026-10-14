@@ -353,6 +353,17 @@ export interface IntegrationsOverview {
   };
 }
 
+export interface PrimaryBusiness {
+  id: string;
+  name: string;
+}
+
+export interface BackupSheetConfig {
+  spreadsheet_url: string | null;
+  updated_by_user_id: string | null;
+  updated_at: string;
+}
+
 export interface ApiKey {
   id: string;
   business_id: string;

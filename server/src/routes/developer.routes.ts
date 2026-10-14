@@ -24,4 +24,9 @@ router.get('/usage', developer.getUsage);
 router.get('/logs', developer.getLogs);
 router.get('/audit', developer.getAuditLogs);
 
+router.get('/primary-business', developer.getPrimaryBusiness);
+
+router.get('/backup-sheet', developer.getBackupSheetConfig);
+router.put('/backup-sheet', developer.updateBackupSheetConfig);
+
 export default router;

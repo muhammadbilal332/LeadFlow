@@ -1,5 +1,28 @@
 import { query } from '../db/pool';
 
+export interface PrimaryBusiness {
+  id: string;
+  name: string;
+}
+
+/**
+ * The one real, non-platform business a developer-console page should act
+ * on by default (LeadFlow is a standalone single-business application —
+ * see docs/DEVELOPER_DASHBOARD.md). Deliberately excludes by the caller's
+ * own business id, never by matching the scaffold business's name — the
+ * test suite creates differently-named platform businesses per developer
+ * account, and in any case an id is never ambiguous the way a name match
+ * could be. Picks the oldest match so the result is stable even if more
+ * than one such business exists.
+ */
+export async function findPrimaryBusiness(excludeBusinessId: string): Promise<PrimaryBusiness | null> {
+  const result = await query<PrimaryBusiness>(
+    `SELECT id, name FROM businesses WHERE id <> $1 ORDER BY created_at ASC LIMIT 1`,
+    [excludeBusinessId]
+  );
+  return result.rows[0] ?? null;
+}
+
 export interface PlatformOverview {
   totalBusinesses: number;
   totalUsers: number;

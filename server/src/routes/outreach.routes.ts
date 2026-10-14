@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { requireAuthOrApiKey } from '../middleware/requireAuthOrApiKey';
 import { requireRole } from '../middleware/requireRole';
+import { resolveTargetBusinessForDeveloper } from '../middleware/requireTargetBusiness';
 import * as contacts from '../controllers/outreachContactController';
 import * as sequences from '../controllers/outreachSequenceController';
 import * as drafts from '../controllers/outreachDraftController';
@@ -63,7 +64,11 @@ router.post('/campaign-contacts/:campaignContactId/generate-draft', generateFoll
 router.get('/inbox', listInbox);
 router.get('/threads/:threadId', getThreadConversation);
 
-router.get('/providers', requireRole('owner', 'manager'), providers.getProviders);
+// /providers and /settings are also used by the developer-console
+// Integrations page (webhook/meta/routing moved there entirely — see
+// docs/DEVELOPER_DASHBOARD.md); resolveTargetBusinessForDeveloper lets a
+// developer target a specific real business and is a no-op for owner/manager.
+router.get('/providers', requireRole('owner', 'manager', 'developer'), resolveTargetBusinessForDeveloper, providers.getProviders);
 router.get('/usage', requireRole('owner', 'manager'), providers.getUsage);
 
 // The suppression list is business-wide do-not-contact data, not scoped to
@@ -78,7 +83,7 @@ router.get('/imports', requireRole('owner', 'manager'), sheetImports.listImports
 // contacts even by calling this endpoint directly.
 router.post('/imports', requireRole('owner', 'manager'), sheetImports.triggerImport);
 
-router.get('/settings', requireRole('owner', 'manager'), emailSettings.getSettings);
-router.patch('/settings', requireRole('owner', 'manager'), emailSettings.updateSettings);
+router.get('/settings', requireRole('owner', 'manager', 'developer'), resolveTargetBusinessForDeveloper, emailSettings.getSettings);
+router.patch('/settings', requireRole('owner', 'manager', 'developer'), resolveTargetBusinessForDeveloper, emailSettings.updateSettings);
 
 export default router;

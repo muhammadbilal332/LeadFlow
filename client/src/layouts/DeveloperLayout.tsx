@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users2, Send, Workflow, HeartPulse, Plug, Gauge,
   ScrollText, ShieldCheck, Settings, Menu, X, LogOut, ShieldAlert,
+  Webhook, Route as RouteIcon,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -11,6 +12,8 @@ const NAV_ITEMS = [
   { to: '/developer/users', label: 'Users', icon: Users2 },
   { to: '/developer/outreach', label: 'Outreach', icon: Send },
   { to: '/developer/automation', label: 'Automation', icon: Workflow },
+  { to: '/developer/integrations', label: 'Integrations', icon: Webhook },
+  { to: '/developer/routing', label: 'Lead Routing', icon: RouteIcon },
   { to: '/developer/health', label: 'API Health', icon: HeartPulse },
   { to: '/developer/providers', label: 'Provider Status', icon: Plug },
   { to: '/developer/usage', label: 'Usage', icon: Gauge },

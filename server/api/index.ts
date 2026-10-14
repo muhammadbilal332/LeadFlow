@@ -1,5 +1,6 @@
 import { createApp } from '../src/app';
 import { ensureDeveloperAccount } from '../src/db/seedDeveloper';
+import { ensureOwnerAccount } from '../src/db/seedOwner';
 
 // Vercel serverless entry point. This wraps the exact same Express app
 // used by server.ts — no business logic, routes, or middleware differ
@@ -13,6 +14,10 @@ const app = createApp();
 // no-ops if it already exists.
 ensureDeveloperAccount().catch((err) => {
   console.error('Failed to provision developer account:', err instanceof Error ? err.message : err);
+});
+
+ensureOwnerAccount().catch((err) => {
+  console.error('Failed to provision owner account:', err instanceof Error ? err.message : err);
 });
 
 export default app;

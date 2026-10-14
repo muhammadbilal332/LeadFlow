@@ -49,12 +49,6 @@ export default function LoginPage(): React.ReactElement {
           {submitting ? 'Logging in...' : 'Log in'}
         </button>
       </form>
-
-      <div className="mt-6 rounded-md bg-slate-50 p-3 text-xs text-slate-500">
-        <p className="font-medium text-slate-600">Demo credentials</p>
-        <p>Owner: owner@novagrowth.com / Demo1234!</p>
-        <p>Sales: alex@novagrowth.com / Demo1234!</p>
-      </div>
     </div>
   );
 }

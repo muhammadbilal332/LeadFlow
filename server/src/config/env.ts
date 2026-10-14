@@ -65,6 +65,24 @@ const envSchema = z.object({
   // ===========================================================
   DEVELOPER_EMAIL: z.string().optional().default(''),
   DEVELOPER_PASSWORD: z.string().optional().default(''),
+
+  // ===========================================================
+  // Owner account bootstrap — the one real business's first owner user,
+  // seeded once at startup if all three are set and no user with this
+  // email exists yet. There is no public signup endpoint (see
+  // docs/MIGRATION_TO_CLIENT.md), so this is the only production-safe way
+  // to create the first real account on a fresh database — never through
+  // the demo seed script (server/src/db/seed.ts), which is for local
+  // development only. Never hardcode a real password; leave blank to skip.
+  // ===========================================================
+  OWNER_EMAIL: z.string().optional().default(''),
+  OWNER_PASSWORD: z.string().optional().default(''),
+  OWNER_NAME: z.string().optional().default('Owner'),
+  OWNER_BUSINESS_NAME: z.string().optional().default(''),
+
+  // Guard for server/src/db/seed.ts (demo data) — see that file. Only
+  // meaningful when NODE_ENV=production; ignored otherwise.
+  ALLOW_SEED_IN_PRODUCTION: z.string().optional().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

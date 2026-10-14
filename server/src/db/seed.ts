@@ -2,6 +2,7 @@ import { getPool, query } from './pool';
 import { hashPassword } from '../utils/password';
 import { calculateLeadScore, priorityFromScore } from '../services/scoringService';
 import { slugify } from '../utils/slug';
+import { env } from '../config/env';
 
 const DEMO_BUSINESS_NAME = 'Nova Growth Agency';
 const DEMO_PASSWORD = 'Demo1234!';
@@ -58,7 +59,26 @@ async function findOrCreateUser(
   return result.rows[0].id;
 }
 
+/**
+ * This script is for local development only — it inserts fabricated demo
+ * leads/contacts/quotations under a fake "Nova Growth Agency" business.
+ * It is never invoked automatically (no build/start/CI step calls it; see
+ * docs/MIGRATION_TO_CLIENT.md), but refuse outright if NODE_ENV=production
+ * so a shell with production credentials loaded can't run `npm run
+ * db:seed` against the real client database by mistake. Set
+ * ALLOW_SEED_IN_PRODUCTION=yes-i-am-sure to override, for the rare case of
+ * deliberately reseeding a production-configured staging environment.
+ */
+export function assertNotProduction(nodeEnv: string, allowOverride: string): void {
+  if (nodeEnv === 'production' && allowOverride !== 'yes-i-am-sure') {
+    throw new Error(
+      'Refusing to seed demo data: NODE_ENV=production. If this is genuinely not the real client database, set ALLOW_SEED_IN_PRODUCTION=yes-i-am-sure and re-run.'
+    );
+  }
+}
+
 async function seed(): Promise<void> {
+  assertNotProduction(env.NODE_ENV, env.ALLOW_SEED_IN_PRODUCTION);
   console.log('Seeding demo data for', DEMO_BUSINESS_NAME);
 
   const existingBusiness = await query<{ id: string }>('SELECT id FROM businesses WHERE name = $1', [DEMO_BUSINESS_NAME]);

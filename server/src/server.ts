@@ -1,6 +1,7 @@
 import { createApp } from './app';
 import { env } from './config/env';
 import { ensureDeveloperAccount } from './db/seedDeveloper';
+import { ensureOwnerAccount } from './db/seedOwner';
 
 const app = createApp();
 
@@ -10,4 +11,8 @@ app.listen(env.PORT, () => {
 
 ensureDeveloperAccount().catch((err) => {
   console.error('Failed to provision developer account:', err instanceof Error ? err.message : err);
+});
+
+ensureOwnerAccount().catch((err) => {
+  console.error('Failed to provision owner account:', err instanceof Error ? err.message : err);
 });

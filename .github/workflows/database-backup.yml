@@ -33,6 +33,18 @@ name: Database backup
 #   GOOGLE_SERVICE_ACCOUNT_JSON  - single-line service-account key JSON
 #   GOOGLE_SHEETS_SPREADSHEET_ID - the target spreadsheet's id
 #
+# The R2 backup's own schedule (above) is NEVER gated by working hours — it
+# always runs every 15 minutes, unchanged. Only the secondary Google Sheets
+# log is restricted to a configurable working window (default: 09:00-18:00
+# UTC, Mon-Sat), via these optional repository VARIABLES (not secrets —
+# they hold no sensitive data). See docs/GOOGLE_SHEETS_BACKUP_LOGGING.md:
+#   SHEETS_SCHEDULE_TIMEZONE      - IANA timezone name, default "UTC"
+#   SHEETS_SCHEDULE_WORKING_DAYS  - comma list, 1=Mon..7=Sun, default "1,2,3,4,5,6"
+#   SHEETS_SCHEDULE_START_HOUR    - 0-23 local hour, default "9"
+#   SHEETS_SCHEDULE_WORKING_HOURS - 1-24 hour duration, default "9"
+# A manual workflow_dispatch run always logs to Sheets regardless of the
+# window (useful for testing/emergency runs) — see scheduleGate.ts.
+#
 # See docs/DATABASE_BACKUP_AND_RESTORE.md for how to obtain/create each of
 # these safely.
 #
@@ -102,8 +114,34 @@ jobs:
         working-directory: scripts/backup/sheets
         run: npm ci
 
-      - name: Log backup manifest to Google Sheets
+      # Decides whether "now" falls inside the configured working window —
+      # see scripts/backup/sheets/src/scheduleGate.ts. Does NOT decide
+      # whether this run happens at all (the R2 backup above already ran
+      # unconditionally); only gates the secondary Sheets log below. A
+      # config error here is logged but never fails the job
+      # (continue-on-error), and the following step's `if:` treats a
+      # missing/errored decision the same as "outside the window" — fails
+      # safe by skipping Sheets, never by blocking R2.
+      - name: Check Sheets working-window schedule
+        id: schedule_gate
         if: always()
+        continue-on-error: true
+        working-directory: scripts/backup/sheets
+        run: npm run schedule-gate
+        env:
+          SHEETS_SCHEDULE_TIMEZONE: ${{ vars.SHEETS_SCHEDULE_TIMEZONE }}
+          SHEETS_SCHEDULE_WORKING_DAYS: ${{ vars.SHEETS_SCHEDULE_WORKING_DAYS }}
+          SHEETS_SCHEDULE_START_HOUR: ${{ vars.SHEETS_SCHEDULE_START_HOUR }}
+          SHEETS_SCHEDULE_WORKING_HOURS: ${{ vars.SHEETS_SCHEDULE_WORKING_HOURS }}
+
+      # Only runs inside the configured working window, OR on a manual
+      # workflow_dispatch run (always logs, for testing/emergency use) —
+      # the window never applies to a human-triggered run. Secret-presence
+      # and idempotency checks inside logBackupManifest.ts still apply
+      # regardless of trigger type, so this bypass never skips a safety
+      # check, only the schedule gate itself.
+      - name: Log backup manifest to Google Sheets
+        if: always() && (github.event_name == 'workflow_dispatch' || steps.schedule_gate.outputs.in_window == 'true')
         continue-on-error: true
         working-directory: scripts/backup/sheets
         run: |

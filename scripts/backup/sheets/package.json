@@ -7,6 +7,7 @@
   "scripts": {
     "log-manifest": "tsx src/logBackupManifest.ts",
     "export-business-data": "tsx src/exportBusinessData.ts",
+    "schedule-gate": "tsx src/scheduleGate.ts",
     "test": "vitest run",
     "lint": "tsc --noEmit"
   },

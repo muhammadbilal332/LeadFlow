@@ -25,9 +25,12 @@ choose, at a time of your choosing.
 
 **Secondary logging**: every backup attempt is also optionally mirrored
 as one row in a Google Sheet, and a small, minimized allowlist of
-business data is exported there daily for quick human inspection. This
-is entirely additive — if it's not configured, or Google is down, the
-R2 backup above is completely unaffected. See
+business data is kept as a fresh snapshot there, both refreshed every 15
+minutes during a configurable working window (default 09:00-18:00 UTC,
+Mon-Sat) for quick human inspection. This is entirely additive — if it's
+not configured, or Google is down, the R2 backup above is completely
+unaffected, and its own 15-minute schedule is never changed by the
+working-window setting. See
 [docs/GOOGLE_SHEETS_BACKUP_LOGGING.md](./GOOGLE_SHEETS_BACKUP_LOGGING.md).
 
 ### Why only schema `public`
@@ -233,3 +236,16 @@ whatever the live database already contains.
 
 None of these are committed anywhere in the repository. See the setup
 checklist in the implementation report for exactly where to find each value.
+
+## Repository variables (not secrets — nothing sensitive)
+
+| Variable | Used by | Purpose |
+|---|---|---|
+| `SHEETS_SCHEDULE_TIMEZONE` | both workflows (optional, default `UTC`) | Timezone for the Sheets working-window schedule — see [docs/GOOGLE_SHEETS_BACKUP_LOGGING.md](./GOOGLE_SHEETS_BACKUP_LOGGING.md) |
+| `SHEETS_SCHEDULE_WORKING_DAYS` | both workflows (optional, default `1,2,3,4,5,6`) | Working weekdays (1=Mon..7=Sun) for the Sheets schedule |
+| `SHEETS_SCHEDULE_START_HOUR` | both workflows (optional, default `9`) | Local hour the Sheets working window opens |
+| `SHEETS_SCHEDULE_WORKING_HOURS` | both workflows (optional, default `9`) | Duration in hours of the Sheets working window |
+
+These only affect the secondary Sheets destinations. The R2 backup above
+runs on its own unconditional 15-minute schedule regardless of these
+values.

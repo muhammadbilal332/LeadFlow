@@ -7,10 +7,20 @@ name: Business data export (Google Sheets)
 # Cloudflare R2 (database-backup.yml), which remain the only authoritative,
 # complete, restorable backup.
 #
-# Runs daily by default (business data changes far slower than the 15-minute
-# R2 schedule needs; a daily cadence keeps Sheets API usage and spreadsheet
-# history growth low while still being genuinely useful for "what did this
-# look like recently"). Also runs on demand via workflow_dispatch.
+# The cron below fires every 15 minutes, same interval as the R2 backup,
+# but each firing is gated by a configurable working window (default:
+# 09:00-18:00 UTC, Mon-Sat) — see scripts/backup/sheets/src/scheduleGate.ts.
+# Outside that window the run exits as a normal no-op. This keeps Sheets API
+# usage and spreadsheet history growth bounded to actual working hours
+# rather than exporting around the clock. workflow_dispatch always exports,
+# regardless of the window, for testing/emergency use.
+#
+# Configurable via optional repository VARIABLES (not secrets — not
+# sensitive); see docs/GOOGLE_SHEETS_BACKUP_LOGGING.md:
+#   SHEETS_SCHEDULE_TIMEZONE      - IANA timezone name, default "UTC"
+#   SHEETS_SCHEDULE_WORKING_DAYS  - comma list, 1=Mon..7=Sun, default "1,2,3,4,5,6"
+#   SHEETS_SCHEDULE_START_HOUR    - 0-23 local hour, default "9"
+#   SHEETS_SCHEDULE_WORKING_HOURS - 1-24 hour duration, default "9"
 #
 # Required repository secrets (shared with database-backup.yml — see
 # docs/DATABASE_BACKUP_AND_RESTORE.md and docs/GOOGLE_SHEETS_BACKUP_LOGGING.md):
@@ -18,14 +28,15 @@ name: Business data export (Google Sheets)
 #   GOOGLE_SERVICE_ACCOUNT_JSON
 #   GOOGLE_SHEETS_SPREADSHEET_ID
 #
-# If either Google secret is missing, this workflow fails clearly (unlike
+# If either Google secret is missing during a run that's inside the working
+# window (or manually triggered), this workflow fails clearly (unlike
 # database-backup.yml's Sheets step, there is no R2 equivalent here to
 # protect — exporting business data to Sheets is this workflow's entire
 # purpose) rather than silently doing nothing.
 
 on:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch: {}
 
 concurrency:
@@ -48,10 +59,30 @@ jobs:
         working-directory: scripts/backup/sheets
         run: npm ci
 
+      - name: Check Sheets working-window schedule
+        id: schedule_gate
+        working-directory: scripts/backup/sheets
+        run: npm run schedule-gate
+        env:
+          SHEETS_SCHEDULE_TIMEZONE: ${{ vars.SHEETS_SCHEDULE_TIMEZONE }}
+          SHEETS_SCHEDULE_WORKING_DAYS: ${{ vars.SHEETS_SCHEDULE_WORKING_DAYS }}
+          SHEETS_SCHEDULE_START_HOUR: ${{ vars.SHEETS_SCHEDULE_START_HOUR }}
+          SHEETS_SCHEDULE_WORKING_HOURS: ${{ vars.SHEETS_SCHEDULE_WORKING_HOURS }}
+
+      # Runs inside the configured working window, OR on a manual
+      # workflow_dispatch run (always exports — the window never applies to
+      # a human-triggered run). Secret-presence and idempotency checks
+      # inside exportBusinessData.ts still apply regardless of trigger
+      # type, so this bypass never skips a safety check.
       - name: Export business data to Google Sheets
+        if: github.event_name == 'workflow_dispatch' || steps.schedule_gate.outputs.in_window == 'true'
         working-directory: scripts/backup/sheets
         run: npm run export-business-data
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.GOOGLE_SHEETS_SPREADSHEET_ID }}
+
+      - name: Skipped — outside configured working window
+        if: github.event_name != 'workflow_dispatch' && steps.schedule_gate.outputs.in_window != 'true'
+        run: echo "Outside the configured Sheets working window — no export attempted this run. This is normal, not a failure."

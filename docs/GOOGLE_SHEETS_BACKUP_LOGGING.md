@@ -92,20 +92,67 @@ isn't just application discipline, it's enforced by the database.
 
 ## Schedule
 
-- **Backup Log**: every 15 minutes, piggybacking on the existing R2
-  backup schedule (`database-backup.yml`) — no new schedule, no change
-  to R2's own 15-minute cadence.
-- **Export Runs + business-data tabs**: **daily** at 03:00 UTC
-  (`business-data-export.yml`), plus manual `workflow_dispatch`.
+Both Sheets destinations run every 15 minutes, but only **during a
+configurable working window** — a number of hours per day, on a
+configurable set of weekdays, in a configurable timezone. Outside that
+window, the scheduled run is a normal no-op (not a failure, not a skipped
+trigger — the workflow still runs on schedule, it just decides there's
+nothing to do).
 
-  Why daily, not every 15 minutes: business data (leads, contacts,
-  quotations) changes far slower than every 15 minutes, and a full
-  overwrite of 3 tabs that often would multiply Sheets API calls roughly
-  96x for no real benefit — nobody needs a quarter-hourly refresh of a
-  spreadsheet meant for occasional human inspection. If your data volume
-  or review needs genuinely justify a shorter interval later, this is a
-  one-line cron change in `business-data-export.yml` — but do that
-  deliberately, not as a default.
+**The R2 backup's own schedule is never affected by this window** — it
+continues to run every 15 minutes, 24/7, exactly as before. Only the
+secondary Sheets log and the business-data export are restricted to
+working hours, to keep Sheets API usage and spreadsheet history growth
+proportional to a real working day instead of running around the clock
+for a feature meant for human inspection.
+
+### Configuration (repository Variables, not Secrets — nothing sensitive)
+
+Set these under **Settings → Secrets and variables → Actions → Variables**
+(not the Secrets tab — these aren't sensitive, so they don't need encryption,
+and showing up as plain variables makes the schedule easy to audit/change).
+All are optional; every one has a documented default and none are hardcoded
+into the workflow files themselves.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SHEETS_SCHEDULE_TIMEZONE` | `UTC` | Any IANA timezone name (e.g. `America/New_York`, `Asia/Karachi`). Daylight-saving transitions are handled automatically via Node's built-in timezone database — no manual DST adjustment needed. |
+| `SHEETS_SCHEDULE_WORKING_DAYS` | `1,2,3,4,5,6` | Comma-separated ISO weekday numbers, `1`=Monday .. `7`=Sunday. Default is Monday-Saturday (6 days/week). |
+| `SHEETS_SCHEDULE_START_HOUR` | `9` | Local hour (0-23) the working window opens, in the configured timezone. |
+| `SHEETS_SCHEDULE_WORKING_HOURS` | `9` | How many hours the window stays open (1-24). Default window is 09:00-18:00. |
+
+The window must stay within one calendar day (`start hour + working hours`
+≤ 24) — a window that would cross midnight is rejected as a configuration
+error (a clear failure in the "Check Sheets working-window schedule" step,
+not a silent miscalculation) rather than guessed at. Pick a start hour and
+duration that fit inside one day in the configured timezone.
+
+The decision logic lives in one place —
+[`scripts/backup/sheets/src/scheduleGate.ts`](../scripts/backup/sheets/src/scheduleGate.ts)
+— covered by its own test suite (`scheduleGate.test.ts`), including a test
+that verifies a DST transition is handled correctly without any
+special-case code.
+
+### Manual runs always bypass the window
+
+`workflow_dispatch` (the **Run workflow** button in the Actions tab) always
+performs the Sheets write, regardless of the configured window — useful for
+testing or an emergency export. This bypasses only the *schedule* check; the
+underlying safety checks (required secrets present, idempotent
+run/attempt deduplication) in `logBackupManifest.ts` / `exportBusinessData.ts`
+still apply exactly as on a scheduled run.
+
+### Why every 15 minutes rather than daily
+
+Both Sheets destinations now share the R2 backup's own 15-minute cron
+trigger interval, so no second cron schedule needed to be invented — the
+workflow simply checks the working-window gate on every firing and skips
+the actual write when outside it. Business data (leads, contacts,
+quotations) still won't change meaningfully every 15 minutes in practice,
+but the gate means Sheets is refreshed promptly within working hours
+without a human needing to wait for a fixed daily time, and the window
+bounds total API usage to a known number of working hours per week (see
+Cost and quota below) rather than 24/7.
 
 ## Spreadsheet limits
 
@@ -187,7 +234,22 @@ Copy the spreadsheet's ID from its URL:
   that).
 - `GOOGLE_SHEETS_SPREADSHEET_ID` — the ID from step 5.
 
-### 7. Trigger a manual run to verify
+### 7. (Optional) Configure the working-window schedule
+
+Defaults to 09:00-18:00 UTC, Monday-Saturday — fine to skip this step and
+keep those defaults. To change them: **Settings → Secrets and variables →
+Actions → Variables tab → New repository variable** (these are Variables,
+not Secrets — nothing here is sensitive):
+
+- `SHEETS_SCHEDULE_TIMEZONE` — e.g. `Asia/Karachi`, `America/New_York`.
+- `SHEETS_SCHEDULE_WORKING_DAYS` — e.g. `1,2,3,4,5` for Monday-Friday.
+- `SHEETS_SCHEDULE_START_HOUR` — e.g. `8` for an 08:00 start.
+- `SHEETS_SCHEDULE_WORKING_HOURS` — e.g. `8` for an 8-hour day.
+
+See the Schedule section above for the full rules (window must fit in one
+calendar day, weekday numbering, etc).
+
+### 8. Trigger a manual run to verify
 
 **Actions tab → "Database backup" → Run workflow** (verifies the Backup
 Log path), and separately **Actions tab → "Business data export" → Run
@@ -196,11 +258,13 @@ afterward.
 
 ## Reading the manifest / identifying problems
 
-- **A gap in Backup Log's timestamps** longer than ~15–20 minutes during
-  a period you'd expect activity means either the schedule didn't fire
-  (see the cron caveat in `DATABASE_BACKUP_AND_RESTORE.md`) or this
-  logging step itself failed (check the Actions tab — the R2 backup
-  result is authoritative regardless, this log is secondary).
+- **A gap in Backup Log's timestamps that spans only outside your
+  configured working window is expected** — no row is written there by
+  design. A gap longer than ~15–20 minutes **during** the configured
+  window means either the schedule didn't fire (see the cron caveat in
+  `DATABASE_BACKUP_AND_RESTORE.md`) or this logging step itself failed
+  (check the Actions tab — the R2 backup result is authoritative
+  regardless, this log is secondary).
 - **A `status=failure` row** with a populated `error_summary` tells you
   exactly which step failed, without needing to open the Actions log.
 - **Export Runs with `(skipped: see logs)`** next to a table name means
@@ -223,9 +287,39 @@ afterward.
 
 ## Cost and quota
 
-See the implementation report for the full numbers; in short: Google
-Sheets API usage here is far under its free quota (both the per-minute
-request-rate limit and the lack of any per-request charge for this API),
-and the spreadsheet's own storage is a negligible fraction of a Google
-account's free 15 GB Drive/Gmail/Photos allowance. No billing-enabled
-Google Cloud service is required for any of this.
+Google Sheets API v4 is free with no billing-enabled Google Cloud project
+required, under published quotas (verified at
+[developers.google.com/sheets/api/limits](https://developers.google.com/sheets/api/limits)):
+**300 read requests and 300 write requests per minute, per project** (not
+per spreadsheet) — far above what this system generates even at its
+busiest.
+
+With the default window (9 hours/day, 6 days/week = 54 working hours/week,
+≈ 216 fifteen-minute slots/week) and both workflows firing every 15
+minutes inside it:
+
+- **Backup Log**: 1 Sheets API call (an append) per in-window run ≈ 216
+  calls/week. Outside the window, the R2 backup still runs but the Sheets
+  step is a no-op (zero calls).
+- **Business data export**: roughly 15-20 calls per run (one metadata
+  fetch, then per table: a capacity check, a read of the existing range, a
+  header write, and one-or-few batched data writes, plus the Export Runs
+  append) ≈ 3,200-4,300 calls/week at the busiest. Each run completes in a
+  few seconds, so even its peak burst rate is a small fraction of the
+  300-calls/minute quota, and runs never overlap (the `concurrency` group
+  serializes them).
+
+A narrower window (fewer hours/days) or a wider one (up to 24×7, by
+setting `SHEETS_SCHEDULE_WORKING_HOURS=24` and all 7 days) scales these
+numbers linearly — even 24×7 stays within quota for a database this size,
+but the default keeps usage proportional to an actual working week rather
+than running needlessly overnight and on days off.
+
+GitHub Actions minutes are free and unlimited on this public repository
+(see `docs/DATABASE_BACKUP_AND_RESTORE.md`), so the extra `workflow_dispatch`-
+style 15-minute firings cost nothing there either — the gate step itself
+is a few hundred milliseconds of Node with no external calls.
+
+The spreadsheet's own storage is a negligible fraction of a Google
+account's free 15 GB Drive/Gmail/Photos allowance — a few thousand text
+rows is well under a megabyte.

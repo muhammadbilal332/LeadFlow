@@ -44,7 +44,32 @@ trap cleanup EXIT
 fail() {
   log "BACKUP FAILED: $1"
   write_summary "failure" "$1"
+  write_outputs "failure" "$1"
   exit 1
+}
+
+# Exposes this script's result to later workflow steps (e.g. the Google
+# Sheets manifest logger), regardless of whether this step succeeded or
+# failed — read via `steps.<id>.outputs.*` with `if: always()` on the
+# consuming step. Never includes a secret value; every field here is
+# already in the human-readable summary above.
+write_outputs() {
+  local status="$1"
+  # GITHUB_OUTPUT is simple key=value lines — strip any newline so a
+  # multi-line error can never corrupt a later line's parsing.
+  local error_summary
+  error_summary="$(printf '%s' "${2:-}" | tr '\n' ' ')"
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    {
+      echo "status=$status"
+      echo "timestamp=${TIMESTAMP:-}"
+      echo "object_key=${OBJECT_KEY:-}"
+      echo "size_bytes=${SIZE_BYTES:-}"
+      echo "checksum=${CHECKSUM:-}"
+      echo "duration_seconds=${DURATION:-}"
+      echo "error_summary=$error_summary"
+    } >> "$GITHUB_OUTPUT"
+  fi
 }
 
 write_summary() {
@@ -155,3 +180,4 @@ DURATION=$((END_TIME - START_TIME))
 # --- 10. Record non-sensitive metadata ---
 log "Backup succeeded in ${DURATION}s. Object: $OBJECT_KEY, size: $SIZE_HUMAN, sha256: $CHECKSUM, run: ${GITHUB_RUN_ID:-local}"
 write_summary "success"
+write_outputs "success"

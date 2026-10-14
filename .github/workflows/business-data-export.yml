@@ -1,0 +1,57 @@
+name: Business data export (Google Sheets)
+
+# Exports a minimized, read-only snapshot of a small, explicitly-approved
+# allowlist of business tables (see scripts/backup/sheets/src/businessDataConfig.ts
+# and docs/GOOGLE_SHEETS_BACKUP_LOGGING.md) to Google Sheets, for quick
+# human inspection — NOT a replacement for the full PostgreSQL backups in
+# Cloudflare R2 (database-backup.yml), which remain the only authoritative,
+# complete, restorable backup.
+#
+# Runs daily by default (business data changes far slower than the 15-minute
+# R2 schedule needs; a daily cadence keeps Sheets API usage and spreadsheet
+# history growth low while still being genuinely useful for "what did this
+# look like recently"). Also runs on demand via workflow_dispatch.
+#
+# Required repository secrets (shared with database-backup.yml — see
+# docs/DATABASE_BACKUP_AND_RESTORE.md and docs/GOOGLE_SHEETS_BACKUP_LOGGING.md):
+#   SUPABASE_DB_URL              - read-only use; this workflow only SELECTs
+#   GOOGLE_SERVICE_ACCOUNT_JSON
+#   GOOGLE_SHEETS_SPREADSHEET_ID
+#
+# If either Google secret is missing, this workflow fails clearly (unlike
+# database-backup.yml's Sheets step, there is no R2 equivalent here to
+# protect — exporting business data to Sheets is this workflow's entire
+# purpose) rather than silently doing nothing.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: leadflow-business-data-export
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: scripts/backup/sheets
+        run: npm ci
+
+      - name: Export business data to Google Sheets
+        working-directory: scripts/backup/sheets
+        run: npm run export-business-data
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.GOOGLE_SHEETS_SPREADSHEET_ID }}

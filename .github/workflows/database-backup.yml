@@ -27,8 +27,23 @@ name: Database backup
 #   R2_SECRET_ACCESS_KEY  - R2 API token secret
 #   R2_BUCKET_NAME        - the private R2 bucket dedicated to these backups
 #
+# Optional (for the Google Sheets secondary backup log — see
+# docs/GOOGLE_SHEETS_BACKUP_LOGGING.md). If either is unset, that step is
+# skipped entirely and the R2 backup above is completely unaffected:
+#   GOOGLE_SERVICE_ACCOUNT_JSON  - single-line service-account key JSON
+#   GOOGLE_SHEETS_SPREADSHEET_ID - the target spreadsheet's id
+#
 # See docs/DATABASE_BACKUP_AND_RESTORE.md for how to obtain/create each of
 # these safely.
+#
+# Reliability contract: the R2 backup (the "Run backup" step) and the
+# Google Sheets manifest log are independent. The Sheets step always runs
+# (`if: always()`) and is never allowed to fail the job
+# (`continue-on-error: true`) — a Sheets/Google outage must never mask or
+# invalidate a successful R2 backup. The final "Finalize" step re-asserts
+# the job's real result from the R2 backup step alone, so the job's
+# overall pass/fail in the Actions UI always means "did the R2 backup
+# succeed", never "did the Sheets log write succeed".
 
 on:
   schedule:
@@ -59,6 +74,8 @@ jobs:
           pg_dump --version
 
       - name: Run backup
+        id: backup
+        continue-on-error: true
         run: bash scripts/backup/backup-database.sh
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -66,3 +83,53 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+
+      # Secondary, human-readable log — entirely independent of the R2
+      # backup above. Runs whether the backup succeeded or failed
+      # (if: always()) and is never allowed to fail the job itself
+      # (continue-on-error: true) or flip the job's real result; see the
+      # Finalize step below. Skips itself (not an error) if the Google
+      # secrets aren't configured yet.
+      - name: Set up Node.js
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Google Sheets logger dependencies
+        if: always()
+        continue-on-error: true
+        working-directory: scripts/backup/sheets
+        run: npm ci
+
+      - name: Log backup manifest to Google Sheets
+        if: always()
+        continue-on-error: true
+        working-directory: scripts/backup/sheets
+        run: |
+          if [ -z "$GOOGLE_SERVICE_ACCOUNT_JSON" ] || [ -z "$GOOGLE_SHEETS_SPREADSHEET_ID" ]; then
+            echo "Google Sheets secrets not configured — skipping the secondary backup log (R2 result above is unaffected)."
+            exit 0
+          fi
+          npm run log-manifest
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.GOOGLE_SHEETS_SPREADSHEET_ID }}
+          BACKUP_STATUS: ${{ steps.backup.outputs.status }}
+          BACKUP_TIMESTAMP: ${{ steps.backup.outputs.timestamp }}
+          BACKUP_OBJECT_KEY: ${{ steps.backup.outputs.object_key }}
+          BACKUP_SIZE_BYTES: ${{ steps.backup.outputs.size_bytes }}
+          BACKUP_SHA256: ${{ steps.backup.outputs.checksum }}
+          BACKUP_DURATION_SECONDS: ${{ steps.backup.outputs.duration_seconds }}
+          BACKUP_ERROR_SUMMARY: ${{ steps.backup.outputs.error_summary }}
+
+      # Re-asserts the job's real outcome from the R2 backup step alone —
+      # the two Sheets steps above used continue-on-error specifically so
+      # they could never reach this point having silently failed the job.
+      - name: Finalize (job result reflects the R2 backup only)
+        if: always()
+        run: |
+          if [ "${{ steps.backup.outcome }}" != "success" ]; then
+            echo "R2 backup step failed — failing the job (independent of Google Sheets logging result above)."
+            exit 1
+          fi

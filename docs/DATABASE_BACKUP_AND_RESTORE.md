@@ -23,6 +23,13 @@ you (a) adding GitHub repository secrets once, and (b) optionally
 downloading a backup from R2 to inspect it, from whatever machine you
 choose, at a time of your choosing.
 
+**Secondary logging**: every backup attempt is also optionally mirrored
+as one row in a Google Sheet, and a small, minimized allowlist of
+business data is exported there daily for quick human inspection. This
+is entirely additive — if it's not configured, or Google is down, the
+R2 backup above is completely unaffected. See
+[docs/GOOGLE_SHEETS_BACKUP_LOGGING.md](./GOOGLE_SHEETS_BACKUP_LOGGING.md).
+
 ### Why only schema `public`
 
 A repository audit (see "Audit findings" below) confirmed LeadFlow uses its
@@ -221,6 +228,8 @@ whatever the live database already contains.
 | `R2_SECRET_ACCESS_KEY` | both workflows | R2 API token secret |
 | `R2_BUCKET_NAME` | both workflows | The private backup bucket |
 | `RESTORE_TEST_DB_URL` | `database-restore-validate.yml` only | A **disposable** Postgres instance — never production |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | `database-backup.yml` (optional), `business-data-export.yml` | Secondary Sheets logging — see [docs/GOOGLE_SHEETS_BACKUP_LOGGING.md](./GOOGLE_SHEETS_BACKUP_LOGGING.md) |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | `database-backup.yml` (optional), `business-data-export.yml` | Secondary Sheets logging — see [docs/GOOGLE_SHEETS_BACKUP_LOGGING.md](./GOOGLE_SHEETS_BACKUP_LOGGING.md) |
 
 None of these are committed anywhere in the repository. See the setup
 checklist in the implementation report for exactly where to find each value.
